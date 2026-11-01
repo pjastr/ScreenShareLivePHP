@@ -3,6 +3,23 @@
 Każda zmiana podnosi numer wersji w `app/version.php` (`APP_VERSION`).
 Format: MAJOR.MINOR.PATCH – poprawki zwiększają PATCH, nowe funkcje MINOR.
 
+## 1.1.0 — 2026-11-01
+- **Wyższa jakość obrazu**: przechwytywanie w pełnej rozdzielczości ekranu (do 4K, wcześniej
+  maks. Full HD), wyższe przepływności (do 6 Mb/s na widza), kodek **VP9** domyślnie (ostrzejszy
+  tekst; do wyboru w Panelu admina: VP9 / H.264 / AV1 / VP8 / domyślny przeglądarki) i szybszy start
+  w dobrej jakości.
+- Cztery presety jakości: *Maks. ostrość* (do 2560 px), *Zrównoważona*, *Ruch i wideo*, *Oszczędna*.
+  **Nauczyciel zmienia jakość w trakcie transmisji** bez przerywania połączeń.
+- **Widz wybiera swoją jakość** (Najlepsza / Średnia / Niska – tylko dla swojego połączenia)
+  oraz rozmiar **100% (piksel w piksel)** lub dopasowanie do okna.
+- **Statystyki**: u nauczyciela łączne wysyłanie, źródło, wysyłany obraz, kodek, opóźnienie,
+  ograniczenie jakości (procesor/łącze) z podpowiedzią oraz dane każdego widza; u widza
+  rozdzielczość, klatki/s, przepływność, kodek, straty pakietów, jitter, opóźnienie, typ połączenia.
+- Tryb zapasowy: klatki w wyższej rozdzielczości i jakości JPEG.
+- Tytuł transmisji generuje się automatycznie z daty i godziny (można go zmienić).
+- Strona dla uczniów nie pokazuje linku do logowania nauczycieli (logowanie: `domena/login/`).
+- Bez zmian w bazie danych.
+
 ## 1.0.0 — 2026-11-01
 - Pierwsza wersja: udostępnianie ekranu na żywo podczas zajęć (WebRTC z sygnalizacją przez PHP,
   bez WebSocketów), tryb zapasowy z klatkami przez serwer, jedna transmisja naraz, maks. 180 minut

@@ -341,14 +341,31 @@ final class Live
         return $out;
     }
 
-    /** Presety jakości: maks. bitrate na widza [kbps], liczba klatek, contentHint. */
+    /**
+     * Presety jakości (na jednego widza): maks. szerokość obrazu [px], liczba klatek,
+     * maks. przepływność [kbps], contentHint. Obraz jest przechwytywany w pełnej rozdzielczości
+     * ekranu (do 4K) i zmniejszany przy kodowaniu, dlatego preset można zmienić w trakcie transmisji.
+     */
     public static function qualities(): array
     {
         return [
-            'text' => ['bitrate' => 1500, 'fps' => 10, 'hint' => 'detail'],
-            'balanced' => ['bitrate' => 2000, 'fps' => 20, 'hint' => 'detail'],
-            'motion' => ['bitrate' => 2500, 'fps' => 30, 'hint' => 'motion'],
+            'text' => ['width' => 2560, 'fps' => 15, 'bitrate' => 6000, 'hint' => 'detail'],
+            'balanced' => ['width' => 1920, 'fps' => 15, 'bitrate' => 4000, 'hint' => 'detail'],
+            'motion' => ['width' => 1920, 'fps' => 30, 'bitrate' => 6000, 'hint' => 'motion'],
+            'saver' => ['width' => 1280, 'fps' => 10, 'bitrate' => 1200, 'hint' => 'detail'],
         ];
+    }
+
+    /** Preferowany kodek wideo: auto (domyślny przeglądarki) | vp9 | h264 | vp8 | av1. */
+    public static function codecs(): array
+    {
+        return ['vp9', 'h264', 'av1', 'vp8', 'auto'];
+    }
+
+    public static function codec(): string
+    {
+        $c = (string)Settings::get('live_codec', 'vp9');
+        return in_array($c, self::codecs(), true) ? $c : 'vp9';
     }
 
     /** Próba odgadnięcia kodu jest liczona jak nieudane logowanie (blokada po wielu próbach). */

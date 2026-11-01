@@ -61,7 +61,7 @@
 
 /* ---------- Panel nauczyciela: start ---------- */
 .setup-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; }
-.seg-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.seg-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .seg-card { position: relative; display: flex; cursor: pointer; }
 .seg-card input { position: absolute; opacity: 0; pointer-events: none; }
 .seg-card > span { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface); transition: border-color .15s, box-shadow .15s; }
@@ -104,7 +104,10 @@
 .viewer-list li:hover { background: var(--surface-2); }
 .viewer-list .empty-v { padding: 6px 0; }
 .viewer-list .empty-v:hover { background: none; }
-.v-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v-main { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.v-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v-stats { font-size: .72rem; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.v-vq { font-size: .7rem; font-weight: 650; padding: 1px 6px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
 .v-state { font-size: .74rem; font-weight: 650; padding: 1px 8px; border-radius: 99px; background: var(--surface-2); color: var(--text-2); white-space: nowrap; }
 .v-state.connected { background: var(--success-soft); color: var(--success); }
 .v-state.frames { background: var(--warn-soft); color: var(--warn); }
@@ -131,3 +134,29 @@ dialog.present-modal::backdrop { background: rgba(10, 12, 20, .7); }
 .live-now-row strong { margin-left: 8px; }
 .live-now-row .ic { width: 14px; height: 14px; vertical-align: -2px; margin: 0 3px; }
 .live-now-code { display: flex; flex-direction: column; align-items: center; }
+
+/* ---------- Jakość i statystyki ---------- */
+.btn.active, .menu-item.active { color: var(--accent); }
+.btn.active { border-color: var(--accent); box-shadow: var(--ring); }
+.q-live { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 4px 0 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text-2); }
+.q-live select { border: 0; background: transparent; color: var(--text); font: inherit; font-size: .88rem; font-weight: 550; height: 30px; padding: 0 4px; width: auto; box-shadow: none; }
+.q-live .ic { width: 17px; height: 17px; }
+.stats-panel { border-top: 1px solid var(--border); padding: 12px 14px 14px; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 16px; }
+.stats-grid > div { display: flex; flex-direction: column; min-width: 0; }
+.stats-grid strong { font-variant-numeric: tabular-nums; font-size: .95rem; overflow-wrap: anywhere; }
+.warn-text { color: var(--warn); }
+.stats-hint { margin: 10px 0 0; padding: 8px 10px; border-radius: 9px; background: var(--warn-soft); color: var(--warn); }
+.stats-hint[hidden] { display: none; }
+.q-label { font-size: .68rem; font-weight: 800; letter-spacing: .02em; }
+.menu-item small { display: block; font-size: .75rem; white-space: normal; }
+.menu-item[data-vq] { align-items: flex-start; white-space: normal; min-width: 240px; }
+.menu-item .mi-check { visibility: hidden; color: var(--accent) !important; margin-top: 2px; }
+.menu-item.active .mi-check { visibility: visible; }
+.stats-box { position: absolute; top: 10px; left: 10px; z-index: 2; min-width: 220px; padding: 10px 12px; border-radius: 10px; background: rgba(10, 12, 20, .78); color: #e9ebf2; font: 12px/1.6 var(--mono); pointer-events: none; backdrop-filter: blur(4px); }
+.stats-box[hidden] { display: none; }
+.stats-box div { display: flex; justify-content: space-between; gap: 16px; }
+.stats-box span { color: #a8aec0; }
+.stage.actual { display: block; overflow: auto; }
+.stage.actual video, .stage.actual img { height: auto; max-width: none; object-fit: initial; margin: 0 auto; }
+.stage.actual .stats-box { position: fixed; top: 64px; }

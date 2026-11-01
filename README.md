@@ -14,7 +14,8 @@ na zwykłym hostingu współdzielonym. Licencja: **MIT**.
 | `https://domena/panel/` | panel: udostępnianie ekranu, profil, panel admina |
 
 1. Nauczyciel loguje się, klika **Rozpocznij udostępnianie** i wybiera ekran, okno lub kartę.
-2. Aplikacja tworzy transmisję z **6-cyfrowym kodem**. Kod widzi nauczyciel, który prowadzi
+2. Aplikacja tworzy transmisję z **6-cyfrowym kodem**. Tytuł wypełnia się automatycznie datą
+   i godziną (można go zmienić). Kod widzi nauczyciel, który prowadzi
    transmisję, oraz administrator (Panel admina → Przegląd). Przycisk **Pokaż na ekranie**
    wyświetla adres, kod i kod QR na pełnym ekranie, np. na rzutniku.
 3. Uczniowie wchodzą na stronę główną, wpisują kod (opcjonalnie imię) i oglądają.
@@ -44,9 +45,26 @@ na zwykłym hostingu współdzielonym. Licencja: **MIT**.
 - **Tryb zapasowy**: gdy sieć ucznia blokuje WebRTC, uczeń po ~15 s automatycznie dostaje obraz
   przez serwer (klatka JPEG co ~1 s). Nauczyciel wysyła klatki tylko wtedy, gdy ktoś ich potrzebuje.
   Tryb można wyłączyć w ustawieniach.
-- Presety jakości: *Tekst i slajdy* (10 kl./s), *Zrównoważona* (15 kl./s), *Ruch i wideo* (30 kl./s).
-  Przy 25 widzach komputer nauczyciela koduje obraz 25 razy, a łącze wysyła 25 strumieni
-  (ok. 1–2,5 Mb/s każdy). Na słabszym sprzęcie lub łączu wybierz *Tekst i slajdy*.
+- Ekran jest przechwytywany w pełnej rozdzielczości (do 4K), a obraz zmniejszany dopiero przy
+  kodowaniu, więc **jakość można zmienić w trakcie transmisji** bez przerywania połączeń:
+
+  | Preset | Rozdzielczość | Klatki/s | Maks. na widza |
+  |---|---|---|---|
+  | Maks. ostrość (drobny tekst, kod) | do 2560 px | 15 | 6 Mb/s |
+  | Zrównoważona (domyślna) | Full HD | 15 | 4 Mb/s |
+  | Ruch i wideo | Full HD | 30 | 6 Mb/s |
+  | Oszczędna | HD | 10 | 1,2 Mb/s |
+
+- **Widz** może obniżyć jakość tylko dla siebie (Najlepsza / Średnia / Niska), np. na danych
+  komórkowych, oraz przełączyć obraz na **100% (piksel w piksel)**.
+- Kodek domyślny **VP9** (ostrzejszy tekst przy tej samej przepływności). W Panelu admina można
+  wybrać H.264 (mniejsze obciążenie procesora, często sprzętowe), AV1, VP8 lub domyślny przeglądarki.
+- **Statystyki** (przycisk „Statystyki”): u nauczyciela łączne wysyłanie, rozdzielczość źródła
+  i wysyłanego obrazu, kodek, opóźnienie, czynnik ograniczający jakość (procesor/łącze)
+  z podpowiedzią i dane każdego widza; u widza rozdzielczość, klatki/s, przepływność, kodek,
+  utracone pakiety, jitter, opóźnienie i typ połączenia (LAN / P2P / TURN).
+- Przy 25 widzach komputer nauczyciela koduje obraz osobno dla każdego widza, a łącze wysyła
+  25 strumieni. Gdy statystyki pokazują ograniczenie „procesor” lub „łącze”, wybierz niższy preset.
 - Opcjonalnie dźwięk karty lub systemu (Chrome/Edge; Firefox udostępnia tylko obraz).
 - **Serwery STUN/TURN** ustawia się w Panelu admina. Domyślny publiczny STUN wystarcza w szkolnej
   sieci i w większości sieci domowych. Gdy uczniowie łączą się z sieci z restrykcyjną zaporą,

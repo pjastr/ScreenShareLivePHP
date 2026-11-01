@@ -18,6 +18,18 @@ $s = $liveCfg['stream'];
     <div class="pb-right">
       <span class="pb-chip" title="<?= e(__('live.remaining')) ?>"><?= icon('hourglass') ?><span id="remain">—</span></span>
       <span class="pb-chip" title="<?= e(__('live.viewers')) ?>"><?= icon('users') ?><span id="vcount">—</span></span>
+      <div class="dropdown">
+        <button type="button" class="btn-icon" data-dropdown id="btn-q" title="<?= e(__('live.view.quality')) ?>"><?= icon('adjustments') ?><span class="q-label" id="q-label"></span></button>
+        <div class="menu menu-right" id="q-menu">
+          <div class="menu-head"><strong><?= e(__('live.view.quality')) ?></strong><span class="muted small"><?= e(__('live.view.quality_hint')) ?></span></div>
+          <?php foreach (['high', 'medium', 'low'] as $lv): ?>
+          <button type="button" class="menu-item" data-vq="<?= $lv ?>"><?= icon('check', 'mi-check') ?><span><?= e(__('live.vq.' . $lv)) ?><small class="muted"><?= e(__('live.vq.' . $lv . '_hint')) ?></small></span></button>
+          <?php endforeach; ?>
+          <div class="menu-sep"></div>
+          <button type="button" class="menu-item" id="btn-fit"><?= icon('aspect-ratio') ?><span id="fit-label"><?= e(__('live.view.actual_size')) ?></span></button>
+          <button type="button" class="menu-item" id="btn-stats"><?= icon('chart-bar') ?><span><?= e(__('live.stats')) ?></span></button>
+        </div>
+      </div>
       <button type="button" class="btn-icon" id="btn-sound" hidden title="<?= e(__('live.view.sound')) ?>"><?= icon('volume-off') ?></button>
       <button type="button" class="btn-icon" id="btn-fs" title="<?= e(__('live.view.fullscreen')) ?>"><?= icon('maximize') ?></button>
       <button type="button" class="btn-icon" data-theme-toggle title="<?= e(__('common.theme')) ?>"><?= icon('moon', 'ic-moon') ?><?= icon('sun', 'ic-sun') ?></button>
@@ -30,6 +42,7 @@ $s = $liveCfg['stream'];
   <main class="stage" id="stage">
     <video id="video" playsinline autoplay muted></video>
     <img id="frame" alt="" hidden>
+    <div class="stats-box" id="stats" hidden></div>
     <div class="overlay" id="overlay">
       <div class="ov-box">
         <div class="ov-icon" id="ov-icon"><?= icon('loader-2', 'spin') ?></div>

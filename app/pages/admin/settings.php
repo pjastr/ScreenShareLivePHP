@@ -22,6 +22,8 @@ if (is_post()) {
     $lq = post('live_quality');
     Settings::set('live_quality', isset(Live::qualities()[$lq]) ? $lq : 'balanced');
     Settings::set('live_fallback', isset($_POST['live_fallback']) ? '1' : '0');
+    $codec = post('live_codec');
+    Settings::set('live_codec', in_array($codec, Live::codecs(), true) ? $codec : 'vp9');
     $ice = array_filter(preg_split('/[\s,]+/', post('live_ice_servers')) ?: [], fn($u) => (bool)preg_match('#^stuns?:[A-Za-z0-9.\-]+(:\d+)?$#', $u));
     Settings::set('live_ice_servers', implode("\n", array_slice(array_values($ice), 0, 6)));
     $turn = array_filter(preg_split('/[\s,]+/', post('live_turn_url')) ?: [], fn($u) => (bool)preg_match('#^turns?:[^\s]+$#', $u));
@@ -85,6 +87,11 @@ ob_start(); ?>
     <select name="live_quality">
       <?php foreach (array_keys(Live::qualities()) as $q): ?><option value="<?= e($q) ?>" <?= Settings::get('live_quality', 'balanced') === $q ? 'selected' : '' ?>><?= e(__('live.q.' . $q)) ?> – <?= e(__('live.q.' . $q . '_hint')) ?></option><?php endforeach; ?>
     </select></label>
+  <label class="field"><span><?= e(__('admin.live.codec')) ?></span>
+    <select name="live_codec">
+      <?php foreach (Live::codecs() as $c): ?><option value="<?= e($c) ?>" <?= Live::codec() === $c ? 'selected' : '' ?>><?= e(__('admin.live.codec.' . $c)) ?></option><?php endforeach; ?>
+    </select>
+    <small class="hint"><?= e(__('admin.live.codec_hint')) ?></small></label>
   <label class="switch-field">
     <input type="checkbox" name="live_fallback" value="1" <?= Settings::bool('live_fallback') ? 'checked' : '' ?>>
     <span class="switch" aria-hidden="true"></span>

@@ -21,6 +21,7 @@
 
   var sid = 0, pub = null, code = '', ends = 0, cap = 0, maxV = cfg.maxViewers, skew = 0;
   var quality = cfg.quality, wantAudio = false;
+  try { var sq = sessionStorage.getItem('sslive-quality'); if (sq && cfg.qualities[sq] && cfg.mode === 'own') quality = sq; } catch (e) {}
   var local = null;           // MediaStream z ekranu
   var peers = {};             // id widza -> { pc, cid, created, state, pending: [] }
   var viewers = [];
@@ -31,14 +32,21 @@
   function Q() { return cfg.qualities[quality] || cfg.qualities.balanced; }
 
   /* ---------- Ekran ---------- */
+  /* Jakość wybrana przez widza: obniża rozdzielczość i przepływność tylko dla niego. */
+  var VQ = { high: { scale: 1, rate: 1 }, medium: { scale: 0.67, rate: 0.45 }, low: { scale: 0.5, rate: 0.2 } };
+  var vqs = {};               // id widza -> high | medium | low
+
   function getMedia() {
     var q = Q();
-    var v = { frameRate: { ideal: q.fps, max: q.fps }, width: { max: 1920 }, height: { max: 1080 } };
+    // Przechwytywanie w pełnej rozdzielczości ekranu (do 4K); zmniejszanie odbywa się przy kodowaniu,
+    // więc jakość można zmienić w trakcie transmisji bez ponownego wybierania ekranu.
+    var v = { frameRate: { ideal: q.fps, max: 30 }, width: { max: 3840 }, height: { max: 2160 } };
     var ask = function (audio) { return navigator.mediaDevices.getDisplayMedia({ video: v, audio: audio }); };
     return (wantAudio ? ask(true).catch(function (e) { if (e && e.name === 'TypeError') return ask(false); throw e; }) : ask(false))
       .then(function (ms) {
         ms.getVideoTracks().forEach(function (tr) {
           try { tr.contentHint = q.hint; } catch (e) {}
+          if (tr.applyConstraints) tr.applyConstraints({ frameRate: { ideal: q.fps, max: q.fps } }).catch(function () {});
           tr.addEventListener('ended', function () { if (local === ms) pauseShare(); });
         });
         return ms;
@@ -53,9 +61,8 @@
     $('paused').hidden = !!ms;
     $('btn-switch').hidden = !ms;
     $('btn-stop-share').hidden = !ms;
-    var vt = ms && ms.getVideoTracks()[0];
-    var st = vt && vt.getSettings ? vt.getSettings() : {};
-    $('share-info').textContent = ms ? (vt.label || '') + (st.width ? ' · ' + st.width + '×' + st.height : '') + (ms.getAudioTracks().length ? ' · ' + t('live.with_audio') : '') : '';
+    updateInfo();
+    if (ms) preview.addEventListener('loadedmetadata', updateInfo, { once: true });
     if (old && old !== ms) old.getTracks().forEach(function (tr) { tr.stop(); });
     updatePill();
   }
@@ -115,17 +122,67 @@
     delete peers[id];
   }
 
-  function applyEncoding(pc) {
-    var q = Q();
-    pc.getSenders().forEach(function (s) {
+  function srcSize() {
+    var vt = local && local.getVideoTracks()[0];
+    var st = vt && vt.getSettings ? vt.getSettings() : {};
+    return { w: st.width || preview.videoWidth || 1920, h: st.height || preview.videoHeight || 1080, fps: st.frameRate || 0 };
+  }
+
+  /** Parametry kodowania dla jednego widza: preset nauczyciela × jakość wybrana przez widza. */
+  function applyEncoding(id) {
+    var peer = peers[id];
+    if (!peer) return;
+    var q = Q(), vq = VQ[vqs[id]] || VQ.high, src = srcSize();
+    var scale = Math.max(1, src.w / Math.max(320, q.width * vq.scale));
+    peer.pc.getSenders().forEach(function (s) {
       if (!s.track || s.track.kind !== 'video' || !s.getParameters) return;
-      var p = s.getParameters();
-      if (!p.encodings || !p.encodings.length) p.encodings = [{}];
-      p.encodings[0].maxBitrate = q.bitrate * 1000;
-      p.encodings[0].maxFramerate = q.fps;
-      if (q.hint === 'detail') p.degradationPreference = 'maintain-resolution';
-      s.setParameters(p).catch(function () {});
+      var set = function (withPref) {
+        var p = s.getParameters();
+        if (!p.encodings || !p.encodings.length) return Promise.resolve();
+        p.encodings[0].maxBitrate = Math.round(q.bitrate * 1000 * vq.rate);
+        p.encodings[0].maxFramerate = q.fps;
+        p.encodings[0].scaleResolutionDownBy = Math.round(scale * 100) / 100;
+        if (withPref) p.degradationPreference = q.hint === 'detail' ? 'maintain-resolution' : 'balanced';
+        return s.setParameters(p);
+      };
+      // nie każda przeglądarka obsługuje degradationPreference – wtedy bez niego
+      set(true).catch(function () { return set(false); }).catch(function (e) { console.warn('encoding', e); });
     });
+  }
+
+  /** Preferowany kodek (np. VP9 – lepsza ostrość tekstu przy tej samej przepływności). */
+  function preferCodec(pc) {
+    if (!cfg.codec || cfg.codec === 'auto') return;
+    var mime = 'video/' + (cfg.codec === 'h264' ? 'h264' : cfg.codec);
+    pc.getTransceivers().forEach(function (tc) {
+      if (!tc.sender || !tc.sender.track || tc.sender.track.kind !== 'video' || !tc.setCodecPreferences) return;
+      [window.RTCRtpReceiver, window.RTCRtpSender].some(function (K) {
+        if (!K || !K.getCapabilities) return false;
+        var caps = (K.getCapabilities('video') || {}).codecs || [];
+        var first = caps.filter(function (c) { return c.mimeType.toLowerCase() === mime; });
+        if (!first.length) return false;
+        try { tc.setCodecPreferences(first.concat(caps.filter(function (c) { return first.indexOf(c) < 0; }))); return true; } catch (e) { return false; }
+      });
+    });
+  }
+
+  /** Szybszy start obrazu w dobrej jakości (Chrome): początkowa przepływność zamiast ~300 kb/s. */
+  function boostStart(sdp) {
+    var start = Math.min(Q().bitrate, 2500), lines = sdp.split('\r\n'), inVideo = false, pts = {};
+    lines.forEach(function (l) {
+      if (l.indexOf('m=') === 0) inVideo = l.indexOf('m=video') === 0;
+      var m = inVideo && l.match(/^a=rtpmap:(\d+) (VP8|VP9|H264|AV1)\//i);
+      if (m) pts[m[1]] = true;
+    });
+    var out = [], hasFmtp = {};
+    lines.forEach(function (l) {
+      var m = l.match(/^a=fmtp:(\d+) /);
+      if (m && pts[m[1]] && l.indexOf('x-google-start-bitrate') < 0) { l += ';x-google-start-bitrate=' + start; hasFmtp[m[1]] = true; }
+      out.push(l);
+      var r = l.match(/^a=rtpmap:(\d+) /);
+      if (r && pts[r[1]] && !new RegExp('^a=fmtp:' + r[1] + ' ', 'm').test(sdp)) out.push('a=fmtp:' + r[1] + ' x-google-start-bitrate=' + start);
+    });
+    return out.join('\r\n');
   }
 
   function createPeer(id) {
@@ -135,6 +192,7 @@
     var pc = new RTCPeerConnection({ iceServers: cfg.ice || [] });
     var peer = peers[id] = { pc: pc, cid: cid, created: Date.now(), state: 'connecting', pending: [] };
     local.getTracks().forEach(function (tr) { pc.addTrack(tr, local); });
+    preferCodec(pc);
     pc.onicecandidate = function (e) {
       if (e.candidate && peers[id] === peer) send(id, 'ice', { cid: cid, c: e.candidate.toJSON ? e.candidate.toJSON() : e.candidate });
     };
@@ -142,14 +200,14 @@
       if (peers[id] !== peer) return;
       var cs = pc.connectionState || pc.iceConnectionState;
       peer.state = (cs === 'connected' || cs === 'completed') ? 'connected' : (cs === 'failed' ? 'failed' : (cs === 'disconnected' ? 'connecting' : peer.state));
-      if (peer.state === 'connected') applyEncoding(pc);
+      if (peer.state === 'connected') applyEncoding(id);
       renderViewers();
     };
     pc.onconnectionstatechange = onState;
     pc.oniceconnectionstatechange = onState;
     pc.createOffer()
       .then(function (o) { return pc.setLocalDescription(o); })
-      .then(function () { applyEncoding(pc); send(id, 'offer', { cid: cid, sdp: pc.localDescription.sdp }, true); })
+      .then(function () { applyEncoding(id); send(id, 'offer', { cid: cid, sdp: pc.localDescription.sdp }, true); })
       .catch(function (e) { console.warn('offer', e); });
   }
 
@@ -160,10 +218,18 @@
       if (p && Date.now() - p.created < 4000 && p.state !== 'failed') return;
       createPeer(id);
     } else if (sig.type === 'answer' && p && p.cid === d.cid) {
-      p.pc.setRemoteDescription({ type: 'answer', sdp: d.sdp }).then(function () {
+      var sdp = d.sdp;
+      try { sdp = boostStart(sdp); } catch (e) {}
+      p.pc.setRemoteDescription({ type: 'answer', sdp: sdp }).catch(function () {
+        return p.pc.setRemoteDescription({ type: 'answer', sdp: d.sdp });
+      }).then(function () {
         p.pending.forEach(function (c) { p.pc.addIceCandidate(c).catch(function () {}); });
         p.pending = [];
       }).catch(function (e) { console.warn('answer', e); });
+    } else if (sig.type === 'quality') {
+      vqs[id] = VQ[d.level] ? d.level : 'high';
+      applyEncoding(id);
+      renderViewers();
     } else if (sig.type === 'ice' && p && p.cid === d.cid && d.c) {
       if (p.pc.remoteDescription) p.pc.addIceCandidate(d.c).catch(function () {});
       else p.pending.push(d.c);
@@ -205,7 +271,7 @@
     if (!running || !needFrames || !local) return;
     frameTimer = setTimeout(frameLoop, 1000);
     if (frameBusy || !preview.videoWidth) return;
-    var w = preview.videoWidth, h = preview.videoHeight, sc = Math.min(1, 1600 / w);
+    var w = preview.videoWidth, h = preview.videoHeight, sc = Math.min(1, Math.min(1920, Q().width) / w);
     canvas.width = Math.round(w * sc); canvas.height = Math.round(h * sc);
     canvas.getContext('2d').drawImage(preview, 0, 0, canvas.width, canvas.height);
     frameBusy = true;
@@ -215,7 +281,7 @@
         method: 'POST', credentials: 'same-origin', body: blob,
         headers: { 'Content-Type': 'image/jpeg', 'X-CSRF-Token': App.cfg.csrf }
       }).catch(function () {}).then(function () { frameBusy = false; });
-    }, 'image/jpeg', 0.72);
+    }, 'image/jpeg', 0.85);
   }
 
   /* ---------- Interfejs ---------- */
@@ -263,12 +329,118 @@
       var p = peers[v.id];
       var st = v.mode === 'frames' && (!p || p.state !== 'connected') ? 'frames' : (p ? p.state : (local ? 'connecting' : 'waiting'));
       var name = v.name || t('live.viewer_anon', { n: v.id });
+      var vq = vqs[v.id] && vqs[v.id] !== 'high' ? '<span class="v-vq" title="' + App.esc(t('live.vq_hint')) + '">' + App.esc(t('live.vq.' + vqs[v.id])) + '</span>' : '';
+      var line = statsOn && p && p.stats ? '<span class="v-stats">' + App.esc(peerLine(p.stats)) + '</span>' : '';
       return '<li><span class="avatar avatar-sm">' + App.esc(name.charAt(0).toUpperCase()) + '</span>' +
-        '<span class="v-name" title="' + App.esc(name) + '">' + App.esc(name) + '</span>' +
+        '<span class="v-main"><span class="v-name" title="' + App.esc(name) + '">' + App.esc(name) + '</span>' + line + '</span>' + vq +
         '<span class="v-state ' + st + '">' + App.esc(t(stateNames[st] || st)) + '</span>' +
         '<button type="button" class="btn-icon btn-sm" data-kick="' + v.id + '" data-name="' + App.esc(name) + '" title="' + App.esc(t('live.kick')) + '">' + App.icon('user-x') + '</button></li>';
     }).join('');
   }
+
+  /* ---------- Jakość w trakcie transmisji ---------- */
+  function setQuality(key, silent) {
+    if (!cfg.qualities[key]) return;
+    quality = key;
+    try { sessionStorage.setItem('sslive-quality', key); } catch (e) {}
+    $('q-live').value = key;
+    var q = Q(), vt = local && local.getVideoTracks()[0];
+    if (vt) {
+      try { vt.contentHint = q.hint; } catch (e) {}
+      if (vt.applyConstraints) vt.applyConstraints({ frameRate: { ideal: q.fps, max: q.fps } }).catch(function () {});
+    }
+    Object.keys(peers).forEach(function (id) { applyEncoding(+id); });
+    updateInfo();
+    if (!silent) App.toast(t('live.quality_set', { q: t('live.q.' + key) }), 'success');
+  }
+  $('q-live').addEventListener('change', function () { setQuality(this.value); });
+
+  function updateInfo() {
+    var vt = local && local.getVideoTracks()[0];
+    if (!vt) { $('share-info').textContent = ''; return; }
+    var src = srcSize(), q = Q(), w = Math.min(src.w, q.width), h = Math.round(src.h * w / src.w);
+    $('share-info').textContent = t('live.info', { src: src.w + '×' + src.h, out: w + '×' + h, fps: q.fps, mbps: (q.bitrate / 1000).toLocaleString(App.cfg.lang, { maximumFractionDigits: 1 }) }) +
+      (local.getAudioTracks().length ? ' · ' + t('live.with_audio') : '');
+  }
+
+  /* ---------- Statystyki (WebRTC getStats) ---------- */
+  var statsOn = false, statsTimer = null;
+  function fmtRate(bps) {
+    if (!(bps >= 0)) return '—';
+    return bps >= 1e6 ? (bps / 1e6).toLocaleString(App.cfg.lang, { maximumFractionDigits: 1 }) + ' Mb/s' : Math.round(bps / 1000) + ' kb/s';
+  }
+  function connType(local, remote) {
+    if (!local) return '';
+    if (local.candidateType === 'relay' || (remote && remote.candidateType === 'relay')) return 'TURN';
+    if (local.candidateType === 'host' && (!remote || remote.candidateType === 'host')) return 'LAN';
+    return 'P2P';
+  }
+  function peerLine(s) {
+    return [s.w ? s.w + '×' + s.h : '', s.fps ? Math.round(s.fps) + ' ' + t('live.unit.fps') : '', fmtRate(s.bps), s.rtt >= 0 ? Math.round(s.rtt * 1000) + ' ms' : '', s.conn].filter(Boolean).join(' · ');
+  }
+  function collect(id) {
+    var p = peers[id];
+    if (!p || p.state !== 'connected') return Promise.resolve();
+    return p.pc.getStats().then(function (rep) {
+      var out = null, pair = null, codecs = {}, cands = {};
+      rep.forEach(function (r) {
+        if (r.type === 'outbound-rtp' && (r.kind || r.mediaType) === 'video') out = r;
+        else if (r.type === 'candidate-pair' && (r.nominated || r.selected) && r.state === 'succeeded') pair = pair && pair.bytesSent > r.bytesSent ? pair : r;
+        else if (r.type === 'codec') codecs[r.id] = r;
+        else if (r.type === 'local-candidate' || r.type === 'remote-candidate') cands[r.id] = r;
+      });
+      if (!out) return;
+      var prev = p.prevOut, s = p.stats || {};
+      s.bps = prev && out.timestamp > prev.timestamp ? (out.bytesSent - prev.bytesSent) * 8000 / (out.timestamp - prev.timestamp) : s.bps;
+      p.prevOut = { bytesSent: out.bytesSent, timestamp: out.timestamp };
+      s.w = out.frameWidth || 0; s.h = out.frameHeight || 0; s.fps = out.framesPerSecond || 0;
+      s.limit = out.qualityLimitationReason || 'none';
+      s.codec = out.codecId && codecs[out.codecId] ? codecs[out.codecId].mimeType.replace('video/', '') : (s.codec || '');
+      s.encoder = out.encoderImplementation || '';
+      s.rtt = pair && pair.currentRoundTripTime !== undefined ? pair.currentRoundTripTime : -1;
+      s.conn = pair ? connType(cands[pair.localCandidateId], cands[pair.remoteCandidateId]) : '';
+      p.stats = s;
+    }).catch(function () {});
+  }
+  function statsTick() {
+    var ids = Object.keys(peers);
+    Promise.all(ids.map(collect)).then(function () {
+      var total = 0, limits = {}, codecs = {}, rtts = [], best = null, n = 0;
+      ids.forEach(function (id) {
+        var s = peers[id] && peers[id].stats;
+        if (!s || peers[id].state !== 'connected') return;
+        n++;
+        total += s.bps || 0;
+        if (s.limit && s.limit !== 'none') limits[s.limit] = (limits[s.limit] || 0) + 1;
+        if (s.codec) codecs[s.codec] = 1;
+        if (s.rtt >= 0) rtts.push(s.rtt);
+        if (!best || s.w * s.h > best.w * best.h) best = s;
+      });
+      var src = srcSize();
+      $('st-up').textContent = n ? fmtRate(total) + ' (' + n + ')' : '—';
+      $('st-src').textContent = local ? src.w + '×' + src.h + (src.fps ? ' · ' + Math.round(src.fps) + ' ' + t('live.unit.fps') : '') : '—';
+      $('st-sent').textContent = best ? best.w + '×' + best.h + ' · ' + Math.round(best.fps) + ' ' + t('live.unit.fps') : '—';
+      $('st-codec').textContent = Object.keys(codecs).join(', ') || '—';
+      $('st-rtt').textContent = rtts.length ? Math.round(rtts.reduce(function (a, b) { return a + b; }, 0) / rtts.length * 1000) + ' ms' : '—';
+      var lim = Object.keys(limits).sort(function (a, b) { return limits[b] - limits[a]; })[0];
+      $('st-limit').textContent = lim ? t('live.limit.' + lim) + (n > 1 ? ' (' + limits[lim] + '/' + n + ')' : '') : t('live.limit.none');
+      $('st-limit').className = lim ? 'warn-text' : '';
+      var hint = $('st-hint');
+      hint.hidden = !lim;
+      if (lim) hint.textContent = t(lim === 'cpu' ? 'live.limit_hint.cpu' : 'live.limit_hint.bandwidth');
+      if (statsOn) renderViewers();
+    });
+  }
+  $('btn-stats').addEventListener('click', function () {
+    statsOn = !statsOn;
+    this.setAttribute('aria-pressed', String(statsOn));
+    this.classList.toggle('active', statsOn);
+    $('pub-stats').hidden = !statsOn;
+    try { localStorage.setItem('sslive-stats', statsOn ? '1' : '0'); } catch (e) {}
+    clearInterval(statsTimer);
+    statsTimer = setInterval(function () { if (running && statsOn) statsTick(); }, 1000);
+    if (statsOn) statsTick(); else renderViewers();
+  });
 
   $('viewers').addEventListener('click', function (e) {
     var b = e.target.closest('[data-kick]');
@@ -284,6 +456,8 @@
   function enterLive(r) {
     sid = r.stream.id; pub = r.pub; ends = r.stream.ends; cap = r.stream.cap; maxV = r.max_viewers;
     try { sessionStorage.setItem('sslive-pub', String(sid)); } catch (e) {}
+    $('q-live').value = quality;
+    try { sessionStorage.setItem('sslive-quality', quality); } catch (e) {}
     $('live-title').textContent = r.stream.title;
     setCode(r.code);
     $('setup').hidden = true;
@@ -320,9 +494,21 @@
   }
 
   /* ---------- Akcje ---------- */
+  /* Tytuł generowany automatycznie z daty i godziny (można go zmienić). */
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function autoTitle() {
+    var d = new Date();
+    return t('live.default_title', { date: d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) });
+  }
+  var titleInput = $('setup-form').title, titleAuto = true;
+  titleInput.value = autoTitle();
+  titleInput.addEventListener('input', function () { titleAuto = titleInput.value.trim() === ''; });
+  setInterval(function () { if (titleAuto && document.activeElement !== titleInput) titleInput.value = autoTitle(); }, 15000);
+
   $('setup-form').addEventListener('submit', function (e) {
     e.preventDefault();
     var f = e.target, btn = $('btn-start');
+    if (titleAuto || !f.title.value.trim()) f.title.value = autoTitle();
     quality = (f.querySelector('[name=quality]:checked') || {}).value || quality;
     wantAudio = f.audio.checked;
     btn.disabled = true;
@@ -383,6 +569,8 @@
   });
 
   /* ---------- Start strony ---------- */
+  $('q-live').value = quality;
+  try { if (localStorage.getItem('sslive-stats') === '1') $('btn-stats').click(); } catch (e) {}
   if (cfg.mode === 'own') {
     $('live').hidden = false;
     $('live-title').textContent = cfg.stream.title;

@@ -293,7 +293,7 @@ switch ($action) {
         $items = is_array($in['items'] ?? null) ? array_slice($in['items'], 0, 100) : [];
         foreach ($items as $it) {
             $type = (string)($it['type'] ?? '');
-            if (in_array($type, ['answer', 'ice', 'hello'], true)) {
+            if (in_array($type, ['answer', 'ice', 'hello', 'quality'], true)) {
                 Live::sendSignal((int)$s['id'], (int)$v['id'], 1, $type, $it['data'] ?? null);
             }
         }

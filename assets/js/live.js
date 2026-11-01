@@ -122,7 +122,11 @@
       return p.setRemoteDescription({ type: 'offer', sdp: d.sdp })
         .then(function () { return p.createAnswer(); })
         .then(function (a) { return p.setLocalDescription(a); })
-        .then(function () { send('answer', { cid: d.cid, sdp: p.localDescription.sdp }, true); armConnectTimeout(); })
+        .then(function () {
+          send('answer', { cid: d.cid, sdp: p.localDescription.sdp }, true);
+          if (vq !== 'high') send('quality', { level: vq }, true);
+          armConnectTimeout();
+        })
         .catch(function (e) { console.warn('offer', e); });
     }
     if (sig.type === 'ice' && pc && d.cid === cid && d.c) {
@@ -168,6 +172,7 @@
         if (r.status === 200 && (r.headers.get('Content-Type') || '').indexOf('image/') === 0) {
           frameSeq = parseInt(r.headers.get('X-Frame-Seq') || '0', 10);
           return r.blob().then(function (b) {
+            lastFrameBytes = b.size;
             var u = URL.createObjectURL(b);
             frameImg.onload = function () { if (frameUrl) URL.revokeObjectURL(frameUrl); frameUrl = u; };
             frameImg.src = u;
@@ -255,6 +260,99 @@
       t(kind === 'kicked' ? 'live.view.kicked_text' : 'live.view.ended_text'),
       [{ label: t('live.view.back_home'), primary: true, icon: 'home', href: App.cfg.base }]);
   }
+
+  /* ---------- Jakość wybrana przez widza ---------- */
+  var vq = 'high';
+  try { vq = localStorage.getItem('sslive-vq') || 'high'; } catch (e) {}
+  if (['high', 'medium', 'low'].indexOf(vq) < 0) vq = 'high';
+  function markVq() {
+    document.querySelectorAll('[data-vq]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-vq') === vq); });
+    $('q-label').textContent = vq === 'high' ? 'HD' : (vq === 'medium' ? 'SD' : 'LD');
+  }
+  markVq();
+  document.querySelectorAll('[data-vq]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      vq = b.getAttribute('data-vq');
+      try { localStorage.setItem('sslive-vq', vq); } catch (e) {}
+      markVq();
+      if (token) send('quality', { level: vq }, true);
+      App.toast(t('live.view.quality_set', { q: t('live.vq.' + vq) }), 'success');
+    });
+  });
+
+  /* ---------- Rozmiar: dopasuj do okna / 100% (piksel w piksel) ---------- */
+  var stage = $('stage'), actual = false;
+  function sizeActual() {
+    [video, frameImg].forEach(function (el) {
+      var w = el.videoWidth || el.naturalWidth;
+      el.style.width = actual && w ? (w / (window.devicePixelRatio || 1)) + 'px' : '';
+    });
+  }
+  $('btn-fit').addEventListener('click', function () {
+    actual = !actual;
+    stage.classList.toggle('actual', actual);
+    $('fit-label').textContent = t(actual ? 'live.view.fit' : 'live.view.actual_size');
+    sizeActual();
+  });
+  video.addEventListener('resize', sizeActual);
+  frameImg.addEventListener('load', function () { if (actual) sizeActual(); });
+  window.addEventListener('resize', sizeActual);
+
+  /* ---------- Statystyki odbioru ---------- */
+  var statsBox = $('stats'), statsOn = false, statsTimer = null, prevIn = null, lastFrameBytes = 0;
+  function fmtRate(bps) {
+    if (!(bps >= 0)) return '—';
+    return bps >= 1e6 ? (bps / 1e6).toLocaleString(App.cfg.lang, { maximumFractionDigits: 1 }) + ' Mb/s' : Math.round(bps / 1000) + ' kb/s';
+  }
+  function row(k, v) { return '<div><span>' + App.esc(t(k)) + '</span><b>' + App.esc(v) + '</b></div>'; }
+  function statsTick() {
+    if (!statsOn) return;
+    var disp = (video.clientWidth && video.videoWidth) ? Math.round(video.clientWidth * (window.devicePixelRatio || 1)) + '×' + Math.round(video.clientHeight * (window.devicePixelRatio || 1)) : '—';
+    if (mode === 'frames' || !pc) {
+      statsBox.innerHTML = row('live.st.mode', mode === 'frames' ? t('live.state.frames') : t('live.state.' + state)) +
+        (mode === 'frames' ? row('live.st.res', frameImg.naturalWidth ? frameImg.naturalWidth + '×' + frameImg.naturalHeight : '—') + row('live.st.frame_size', lastFrameBytes ? Math.round(lastFrameBytes / 1024) + ' KB' : '—') + row('live.st.fps', '~1') : '');
+      return;
+    }
+    pc.getStats().then(function (rep) {
+      var inb = null, pair = null, codecs = {}, cands = {};
+      rep.forEach(function (r) {
+        if (r.type === 'inbound-rtp' && (r.kind || r.mediaType) === 'video') inb = r;
+        else if (r.type === 'candidate-pair' && (r.nominated || r.selected) && r.state === 'succeeded') pair = r;
+        else if (r.type === 'codec') codecs[r.id] = r;
+        else if (r.type === 'local-candidate' || r.type === 'remote-candidate') cands[r.id] = r;
+      });
+      if (!inb) { statsBox.innerHTML = row('live.st.mode', t('live.state.' + state)); return; }
+      var bps = prevIn && inb.timestamp > prevIn.timestamp ? (inb.bytesReceived - prevIn.bytesReceived) * 8000 / (inb.timestamp - prevIn.timestamp) : -1;
+      var lossPct = prevIn ? (function () {
+        var lost = (inb.packetsLost || 0) - prevIn.lost, got = (inb.packetsReceived || 0) - prevIn.got;
+        return got + lost > 0 ? Math.max(0, lost) / (got + lost) * 100 : 0;
+      })() : 0;
+      prevIn = { bytesReceived: inb.bytesReceived, timestamp: inb.timestamp, lost: inb.packetsLost || 0, got: inb.packetsReceived || 0 };
+      var lc = pair && cands[pair.localCandidateId], rc = pair && cands[pair.remoteCandidateId];
+      var conn = !lc ? '—' : (lc.candidateType === 'relay' || (rc && rc.candidateType === 'relay') ? 'TURN' : (lc.candidateType === 'host' && (!rc || rc.candidateType === 'host') ? 'LAN' : 'P2P'));
+      statsBox.innerHTML =
+        row('live.st.res', (inb.frameWidth || video.videoWidth || 0) + '×' + (inb.frameHeight || video.videoHeight || 0)) +
+        row('live.st.display', disp) +
+        row('live.st.fps', inb.framesPerSecond !== undefined ? String(Math.round(inb.framesPerSecond)) : '—') +
+        row('live.st.bitrate', fmtRate(bps)) +
+        row('live.st.codec', inb.codecId && codecs[inb.codecId] ? codecs[inb.codecId].mimeType.replace('video/', '') : '—') +
+        row('live.st.loss', lossPct.toFixed(1) + ' %') +
+        row('live.st.jitter', inb.jitter !== undefined ? Math.round(inb.jitter * 1000) + ' ms' : '—') +
+        row('live.st.rtt', pair && pair.currentRoundTripTime !== undefined ? Math.round(pair.currentRoundTripTime * 1000) + ' ms' : '—') +
+        row('live.st.dropped', String(inb.framesDropped || 0)) +
+        row('live.st.conn', conn) +
+        row('live.view.quality', t('live.vq.' + vq));
+    }).catch(function () {});
+  }
+  $('btn-stats').addEventListener('click', function () {
+    statsOn = !statsOn;
+    statsBox.hidden = !statsOn;
+    this.classList.toggle('active', statsOn);
+    try { localStorage.setItem('sslive-vstats', statsOn ? '1' : '0'); } catch (e) {}
+    clearInterval(statsTimer);
+    if (statsOn) { statsTick(); statsTimer = setInterval(statsTick, 1000); }
+  });
+  try { if (localStorage.getItem('sslive-vstats') === '1') $('btn-stats').click(); } catch (e) {}
 
   /* ---------- Sterowanie ---------- */
   var player = $('player');

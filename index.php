@@ -112,6 +112,8 @@ if (!$stream): ?>
     <button class="btn btn-primary btn-block" type="submit"><?= icon('player-play') ?><?= e(__('live.view.watch')) ?></button>
   </form>
 <?php endif; ?>
-  <p class="auth-alt"><a href="<?= e(url(Auth::user() ? 'share' : 'login')) ?>"><?= icon('user') ?> <?= e(Auth::user() ? __('live.view.to_panel') : __('live.view.teacher_login')) ?></a></p>
+  <?php if (Auth::user()): ?>
+  <p class="auth-alt"><a href="<?= e(url('share')) ?>"><?= icon('user') ?> <?= e(__('live.view.to_panel')) ?></a></p>
+  <?php endif; ?>
 <?php
 echo view('layout_auth', ['title' => __('live.view.title'), 'content' => ob_get_clean(), 'extraJs' => ['js/home.js'], 'extraCss' => ['css/live.css']]);

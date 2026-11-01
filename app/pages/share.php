@@ -32,7 +32,8 @@ $cfg = [
     'pubRecent' => $own && Live::ts($active['pub_seen_at']) > time() - 6,
     'ice' => Live::iceServers(),
     'qualities' => Live::qualities(),
-    'quality' => $quality,
+    'quality' => isset(Live::qualities()[$quality]) ? $quality : 'balanced',
+    'codec' => Live::codec(),
     'viewerUrl' => Live::viewerUrl(),
     'maxMinutes' => Live::MAX_MINUTES,
 ];
@@ -151,9 +152,26 @@ ob_start(); ?>
       <div class="preview-bar">
         <span class="muted small" id="share-info"></span>
         <div class="row-actions">
+          <label class="q-live" title="<?= e(__('live.quality_live_hint')) ?>"><?= icon('adjustments') ?>
+            <select id="q-live" aria-label="<?= e(__('live.quality')) ?>">
+              <?php foreach (array_keys(Live::qualities()) as $q): ?><option value="<?= e($q) ?>"><?= e(__('live.q.' . $q)) ?></option><?php endforeach; ?>
+            </select>
+          </label>
+          <button class="btn btn-sm" type="button" id="btn-stats" aria-pressed="false"><?= icon('chart-bar') ?><?= e(__('live.stats')) ?></button>
           <button class="btn btn-sm" type="button" id="btn-switch"><?= icon('device-desktop') ?><?= e(__('live.switch')) ?></button>
           <button class="btn btn-sm" type="button" id="btn-stop-share"><?= icon('screen-share-off') ?><?= e(__('live.pause')) ?></button>
         </div>
+      </div>
+      <div class="stats-panel" id="pub-stats" hidden>
+        <div class="stats-grid">
+          <div><span class="muted small"><?= e(__('live.st.upload')) ?></span><strong id="st-up">—</strong></div>
+          <div><span class="muted small"><?= e(__('live.st.source')) ?></span><strong id="st-src">—</strong></div>
+          <div><span class="muted small"><?= e(__('live.st.sent')) ?></span><strong id="st-sent">—</strong></div>
+          <div><span class="muted small"><?= e(__('live.st.codec')) ?></span><strong id="st-codec">—</strong></div>
+          <div><span class="muted small"><?= e(__('live.st.rtt')) ?></span><strong id="st-rtt">—</strong></div>
+          <div><span class="muted small"><?= e(__('live.st.limit')) ?></span><strong id="st-limit">—</strong></div>
+        </div>
+        <p class="small muted stats-hint" id="st-hint" hidden></p>
       </div>
     </section>
     <aside class="live-side">
