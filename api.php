@@ -139,16 +139,6 @@ switch ($action) {
             $a = Live::active();
             json_out(['error' => __('live.err.busy', ['user' => $a['username'] ?? '?', 'time' => $a ? date('H:i', Live::ts($a['ends_at'])) : '']), 'code' => 'busy'], 409);
         }
-        // Powiadomienie e-mail wysyłane po odpowiedzi do przeglądarki (nie opóźnia startu)
-        if (Notifier::shouldNotify()) {
-            $started = $s;
-            register_shutdown_function(function () use ($started) {
-                if (function_exists('fastcgi_finish_request')) {
-                    @fastcgi_finish_request();
-                }
-                Notifier::streamStarted($started);
-            });
-        }
         json_out(['stream' => Live::publicInfo($s), 'code' => $s['code'], 'pub' => $s['pub_token'], 'max_viewers' => (int)$s['max_viewers']]);
 
     case 'pub.bye':

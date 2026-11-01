@@ -3,6 +3,11 @@
 Każda zmiana podnosi numer wersji w `app/version.php` (`APP_VERSION`).
 Format: MAJOR.MINOR.PATCH – poprawki zwiększają PATCH, nowe funkcje MINOR.
 
+## 1.4.0 — 2026-11-01
+- Usunięto powiadomienia e-mail (wysyłka przez `mail()`/SMTP, ustawienia w panelu admina).
+  Migracja 004 kasuje zapisane ustawienia poczty, w tym hasło SMTP.
+- Wymaga aktualizacji bazy danych (migracja 004).
+
 ## 1.3.0 — 2026-11-01
 - **Nakładka dla nauczyciela** (przycisk „Nakładka” przy kodzie): małe okno z adresem strony,
   kodem dołączenia, pozostałym czasem i liczbą widzów. W Chrome/Edge jest zawsze na wierzchu

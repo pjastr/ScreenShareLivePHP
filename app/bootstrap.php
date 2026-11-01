@@ -12,8 +12,6 @@ require ROOT . '/app/lib/Migrator.php';
 require ROOT . '/app/lib/Totp.php';
 require ROOT . '/app/lib/Auth.php';
 require ROOT . '/app/lib/Live.php';
-require ROOT . '/app/lib/Mailer.php';
-require ROOT . '/app/lib/Notifier.php';
 
 mb_internal_encoding('UTF-8');
 date_default_timezone_set(@date_default_timezone_get() ?: 'UTC');

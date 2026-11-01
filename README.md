@@ -135,9 +135,6 @@ można pobrać kopię bazy (Panel admina → Aktualizacje → Pobierz kopię baz
   użytkownik (nauczyciel)**, weryfikacja dwuetapowa **2FA (TOTP)** z kodem QR i kodami zapasowymi,
   opcjonalne wymuszanie 2FA, blokada po nieudanych próbach logowania.
 - Wejście do panelu admina wymaga 2FA i świeżego kodu.
-- **Powiadomienia e-mail o rozpoczęciu transmisji**: wyłączone / pierwsza transmisja danego dnia /
-  każda transmisja, do administratorów lub wskazanych adresów, przez `mail()` serwera albo SMTP
-  (STARTTLS / SSL, z logowaniem) – z przyciskiem wysyłki testowej. Bez zewnętrznych bibliotek.
 - Panel: przegląd z **bieżącą transmisją** (kod, widzowie, przycisk zakończenia),
   **historia transmisji**, użytkownicy, ustawienia (limity, imię widza: brak / opcjonalne /
   wymagane, jakość, tryb zapasowy, STUN/TURN), języki (wbudowane PL i EN, dodawanie kolejnych
