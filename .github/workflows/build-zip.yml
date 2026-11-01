@@ -1,0 +1,76 @@
+# Buduje paczkę ZIP aplikacji po każdym commicie na gałęzi main.
+# - ZIP jest zawsze dostępny jako artefakt przebiegu (zakładka Actions).
+# - Jeśli w app/version.php pojawi się nowa wersja (APP_VERSION), dla której nie ma jeszcze
+#   tagu vX.Y.Z, tworzony jest GitHub Release z tym ZIP-em – z niego korzysta
+#   „Aktualizacja z GitHub” w panelu administratora.
+name: Build ZIP
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: none
+
+      - name: Lint PHP files
+        run: |
+          find . -name '*.php' -not -path './.git/*' -print0 | xargs -0 -n1 php -l > /dev/null
+
+      - name: Read version
+        id: ver
+        run: |
+          VERSION=$(sed -n "s/^const APP_VERSION = '\(.*\)';/\1/p" app/version.php)
+          if [ -z "$VERSION" ]; then echo "APP_VERSION not found" >&2; exit 1; fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build ZIP
+        run: |
+          NAME="screensharelive-php-${{ steps.ver.outputs.version }}"
+          mkdir -p "build/$NAME"
+          rsync -a ./ "build/$NAME/" \
+            --exclude '.git' --exclude '.github' --exclude 'build' --exclude 'tools' \
+            --exclude '.gitignore' --exclude 'config.php' \
+            --exclude 'storage/tmp/*' --include 'storage/tmp/index.php'
+          mkdir -p "build/$NAME/storage/tmp"
+          [ -f "build/$NAME/storage/tmp/index.php" ] || cp storage/tmp/index.php "build/$NAME/storage/tmp/index.php"
+          (cd build && zip -qr "$NAME.zip" "$NAME")
+          ls -la build/*.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: screensharelive-php-${{ steps.ver.outputs.version }}-${{ steps.ver.outputs.short_sha }}
+          path: build/screensharelive-php-${{ steps.ver.outputs.version }}.zip
+          retention-days: 30
+
+      - name: Create release for new version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          TAG="v$VERSION"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists – skipping (bump APP_VERSION to publish a new one)."
+            exit 0
+          fi
+          gh release create "$TAG" "build/screensharelive-php-$VERSION.zip" \
+            --target "$GITHUB_SHA" \
+            --title "screensharelive-php $VERSION" \
+            --generate-notes

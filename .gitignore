@@ -1,0 +1,6 @@
+config.php
+storage/tmp/*
+!storage/tmp/index.php
+node_modules/
+.DS_Store
+Thumbs.db
