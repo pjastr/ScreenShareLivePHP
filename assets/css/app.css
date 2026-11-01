@@ -390,3 +390,23 @@ dialog.modal::backdrop { background: rgba(10, 12, 20, .45); backdrop-filter: blu
 .legend { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: .88rem; }
 .legend span { display: inline-flex; align-items: center; gap: 8px; }
 .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+/* Logowania */
+.nowrap { white-space: nowrap; }
+.stat-ic-warn { background: var(--danger-soft); color: var(--danger); }
+.day-chart { display: grid; grid-template-columns: repeat(14, 1fr); gap: 6px; align-items: end; height: 150px; margin-bottom: 12px; }
+.day-col { display: flex; flex-direction: column; align-items: center; height: 100%; gap: 4px; min-width: 0; }
+.day-bars { flex: 1; width: 100%; max-width: 34px; display: flex; flex-direction: column; justify-content: flex-end; background: var(--surface-2); border-radius: 6px; overflow: hidden; }
+.day-bars i { display: block; width: 100%; }
+.bar-ok { background: var(--success); }
+.bar-fail { background: var(--danger); }
+.day-val { font-size: .72rem; font-weight: 650; min-height: 1em; }
+.day-lbl { font-size: .68rem; color: var(--text-2); white-space: nowrap; }
+.filters { display: grid; grid-template-columns: 2fr repeat(4, 1fr) auto; gap: 12px; align-items: end; padding: 16px; }
+.filters input, .filters select { height: 38px; }
+.filter-actions { display: flex; gap: 8px; }
+.pager { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+.card-head-row { display: flex; justify-content: space-between; align-items: center; padding: 16px 16px 0; }
+.card-head-row .card-title { margin: 0; }
+@media (max-width: 1100px) { .filters { grid-template-columns: 1fr 1fr; } .day-lbl { font-size: .6rem; } }
+.retention-form select { width: auto; min-width: 140px; height: 38px; }

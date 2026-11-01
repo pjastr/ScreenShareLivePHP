@@ -89,5 +89,25 @@ ob_start(); ?>
     </div>
   </section>
 </div>
+<section class="card table-card">
+  <div class="card-head-row"><h2 class="card-title"><?= icon('list-details') ?><?= e(__('logins.recent')) ?></h2>
+    <a class="btn btn-sm" href="<?= e(url('admin-logins')) ?>"><?= e(__('logins.see_all')) ?></a></div>
+  <table class="table">
+    <tbody>
+    <?php $recent = [];
+    try { $recent = DB::all('SELECT * FROM {login_log} ORDER BY `id` DESC LIMIT 6'); } catch (Throwable $e) {}
+    foreach ($recent as $r): $dt = (new DateTime('@' . strtotime($r['created_at'] . ' UTC')))->setTimezone(app_tz()); ?>
+      <tr>
+        <td><strong><?= e($r['username'] ?? $r['ident']) ?></strong></td>
+        <td class="nowrap small"><?= e($dt->format('Y-m-d')) ?></td>
+        <td class="nowrap small"><?= e($dt->format('H:i:s')) ?></td>
+        <td class="nowrap small"><code><?= e($r['ip']) ?></code></td>
+        <td><span class="badge <?= $r['success'] ? 'badge-success' : 'badge-danger' ?>"><?= e(__('logins.reason.' . $r['reason'])) ?></span></td>
+      </tr>
+    <?php endforeach; ?>
+    <?php if (!$recent): ?><tr><td class="muted center"><?= e(__('logins.empty')) ?></td></tr><?php endif; ?>
+    </tbody>
+  </table>
+</section>
 <?php
 echo view('layout_app', ['title' => __('nav.admin'), 'content' => ob_get_clean(), 'active' => 'admin', 'admin' => true, 'extraCss' => ['css/live.css']]);

@@ -188,6 +188,12 @@ function format_date(?string $utc): string
     return date('Y-m-d H:i', $ts);
 }
 
+/** Strefa czasowa serwera (do wyświetlania dat z bazy, zapisanych w UTC). */
+function app_tz(): DateTimeZone
+{
+    return new DateTimeZone(date_default_timezone_get() ?: 'UTC');
+}
+
 function app_secret(): string
 {
     return (string)($GLOBALS['CONFIG']['secret'] ?? 'sslive');

@@ -187,6 +187,7 @@ ob_start(); ?>
             <button type="button" class="btn-icon" data-dropdown aria-label="<?= e(__('common.more')) ?>"><?= icon('dots-vertical') ?></button>
             <div class="menu menu-right">
               <button type="button" class="menu-item" <?= $editAttrs ?>><?= icon('edit') ?><?= e(__('admin.users.edit')) ?></button>
+              <a class="menu-item" href="<?= e(url('admin-logins', ['user' => $r['id']])) ?>"><?= icon('list-details') ?><?= e(__('logins.history')) ?></a>
               <button type="button" class="menu-item" data-modal-open="pw-user" data-user-id="<?= (int)$r['id'] ?>" data-user-name="<?= e($r['username']) ?>"><?= icon('key') ?><?= e(__('admin.users.set_password')) ?></button>
               <?php if ((int)$r['totp_enabled']): ?>
               <form method="post" data-confirm="<?= e(__('admin.users.reset2fa_confirm', ['user' => $r['username']])) ?>"><?= csrf_field() ?><input type="hidden" name="action" value="reset2fa"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>">

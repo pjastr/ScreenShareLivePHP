@@ -136,7 +136,8 @@ można pobrać kopię bazy (Panel admina → Aktualizacje → Pobierz kopię baz
   opcjonalne wymuszanie 2FA, blokada po nieudanych próbach logowania.
 - Wejście do panelu admina wymaga 2FA i świeżego kodu.
 - Panel: przegląd z **bieżącą transmisją** (kod, widzowie, przycisk zakończenia),
-  **historia transmisji**, użytkownicy, ustawienia (limity, imię widza: brak / opcjonalne /
+  **historia transmisji**, **logowania** (dziennik: użytkownik, data, godzina, IP, wynik,
+  przeglądarka; wykres, filtry, eksport CSV, okres przechowywania), użytkownicy, ustawienia (limity, imię widza: brak / opcjonalne /
   wymagane, jakość, tryb zapasowy, STUN/TURN), języki (wbudowane PL i EN, dodawanie kolejnych
   i tłumaczenie w przeglądarce), aktualizacje, kopia zapasowa bazy (.sql).
 - Nowoczesny interfejs z trybem jasnym i ciemnym, działa w **Chrome i Firefox**.

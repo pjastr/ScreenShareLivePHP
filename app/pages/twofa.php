@@ -33,11 +33,13 @@ if (is_post()) {
     }
     if ($ok) {
         Auth::recordAttempt((string)($_SESSION['2fa_ident'] ?? $u['username']), true);
+        Auth::logLogin($u, (string)($_SESSION['2fa_ident'] ?? $u['username']), true, isset($_POST['backup']) ? 'ok_backup' : 'ok_2fa');
         Auth::login($u);
         redirect(url('share'));
     }
     $_SESSION['2fa_tries'] = (int)($_SESSION['2fa_tries'] ?? 0) + 1;
     Auth::recordAttempt((string)($_SESSION['2fa_ident'] ?? $u['username']), false);
+    Auth::logLogin($u, (string)($_SESSION['2fa_ident'] ?? $u['username']), false, $_SESSION['2fa_tries'] >= 5 ? 'too_many_2fa' : 'bad_2fa');
     if ($_SESSION['2fa_tries'] >= 5) {
         unset($_SESSION['2fa_pending'], $_SESSION['2fa_at'], $_SESSION['2fa_tries']);
         flash('error', __('auth.2fa_too_many'));

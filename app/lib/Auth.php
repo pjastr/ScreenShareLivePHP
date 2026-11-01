@@ -78,6 +78,34 @@ final class Auth
         }
     }
 
+    /**
+     * Zapis do dziennika logowań (Panel admina → Logowania).
+     * $event: login | admin (wejście do panelu admina); $reason: ok, ok_2fa, ok_backup, bad_password,
+     * unknown_user, locked, disabled, bad_2fa, too_many_2fa.
+     */
+    public static function logLogin(?array $u, string $ident, bool $success, string $reason, string $event = 'login'): void
+    {
+        try {
+            DB::insert('login_log', [
+                'user_id' => $u ? (int)$u['id'] : null,
+                'username' => $u['username'] ?? null,
+                'ident' => mb_substr(trim($ident), 0, 190),
+                'event' => $event,
+                'success' => $success ? 1 : 0,
+                'reason' => $reason,
+                'ip' => client_ip(),
+                'user_agent' => mb_substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 255),
+                'created_at' => DB::now(),
+            ]);
+            if (random_int(1, 40) === 1) {
+                $days = max(1, (int)Settings::get('login_log_days', '90'));
+                DB::run('DELETE FROM {login_log} WHERE `created_at` < ?', [gmdate('Y-m-d H:i:s', time() - $days * 86400)]);
+            }
+        } catch (Throwable $e) {
+            // brak tabeli przed aktualizacją bazy – dziennik nie może blokować logowania
+        }
+    }
+
     public static function findByLogin(string $ident): ?array
     {
         return DB::row('SELECT * FROM {users} WHERE `username` = ? OR `email` = ? LIMIT 1', [trim($ident), self::normalizeIdent($ident)]);

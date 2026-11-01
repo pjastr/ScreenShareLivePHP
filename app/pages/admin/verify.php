@@ -41,11 +41,13 @@ if (is_post()) {
         }
     }
     if ($ok) {
+        Auth::logLogin($u, $u['username'], true, isset($_POST['backup']) ? 'ok_backup' : 'ok_2fa', 'admin');
         $_SESSION['admin_verify_tries'] = 0;
         Auth::markAdminVerified();
         redirect(admin_return_url());
     }
     $_SESSION['admin_verify_tries'] = (int)($_SESSION['admin_verify_tries'] ?? 0) + 1;
+    Auth::logLogin($u, $u['username'], false, $_SESSION['admin_verify_tries'] >= 5 ? 'too_many_2fa' : 'bad_2fa', 'admin');
     if ($_SESSION['admin_verify_tries'] >= 5) {
         Auth::logout();
         start_session();

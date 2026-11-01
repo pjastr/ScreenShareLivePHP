@@ -10,6 +10,7 @@ $adminNav = [
     'admin-users' => ['users', __('admin.nav.users')],
     'admin-settings' => ['adjustments', __('admin.nav.settings')],
     'admin-streams' => ['history', __('admin.nav.streams')],
+    'admin-logins' => ['list-details', __('admin.nav.logins')],
     'admin-languages' => ['language', __('admin.nav.languages')],
     'admin-update' => ['refresh', __('admin.nav.update')],
 ];

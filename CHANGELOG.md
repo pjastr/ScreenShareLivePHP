@@ -3,6 +3,15 @@
 Każda zmiana podnosi numer wersji w `app/version.php` (`APP_VERSION`).
 Format: MAJOR.MINOR.PATCH – poprawki zwiększają PATCH, nowe funkcje MINOR.
 
+## 1.5.0 — 2026-11-01
+- **Logowania** (Panel admina) – jak w tablica-php 1.3.0: dziennik logowań z nazwą użytkownika,
+  datą, godziną, adresem IP, wynikiem (udane / błędne hasło / nieznany login / błędny kod 2FA /
+  blokada…), rodzajem (logowanie lub wejście do panelu admina) i przeglądarką. Podsumowanie
+  (24 h / 7 dni), wykres 14 dni, filtry (szukaj, wynik, rodzaj, zakres dat), stronicowanie,
+  eksport CSV, „Historia logowań” w menu użytkownika oraz „Ostatnie logowania” na stronie Przegląd.
+- Okres przechowywania dziennika do wyboru (30/90/180/365 dni, domyślnie 90) i czyszczenie dziennika.
+- Wymaga aktualizacji bazy danych (migracja 005 – tabela `login_log`).
+
 ## 1.4.0 — 2026-11-01
 - Usunięto powiadomienia e-mail (wysyłka przez `mail()`/SMTP, ustawienia w panelu admina).
   Migracja 004 kasuje zapisane ustawienia poczty, w tym hasło SMTP.

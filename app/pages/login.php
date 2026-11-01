@@ -8,6 +8,7 @@ if (is_post()) {
     if ($ident === '' || $password === '') {
         flash('error', __('auth.err.fill_all'));
     } elseif (Auth::isLocked($ident)) {
+        Auth::logLogin(Auth::findByLogin($ident), $ident, false, 'locked');
         flash('error', __('auth.err.locked', ['min' => Auth::LOCK_MINUTES]));
     } else {
         $u = Auth::findByLogin($ident);
@@ -18,8 +19,10 @@ if (is_post()) {
                 password_verify($password, password_hash('dummy-password', PASSWORD_DEFAULT));
             }
             Auth::recordAttempt($ident, false);
+            Auth::logLogin($u, $ident, false, $u ? 'bad_password' : 'unknown_user');
             flash('error', __('auth.err.invalid'));
         } elseif ($u['status'] !== 'active') {
+            Auth::logLogin($u, $ident, false, 'disabled');
             flash('error', __('auth.err.disabled'));
         } else {
             if (password_needs_rehash($u['password_hash'], PASSWORD_DEFAULT)) {
@@ -35,6 +38,7 @@ if (is_post()) {
                 redirect(url('2fa'));
             }
             Auth::recordAttempt($ident, true);
+            Auth::logLogin($u, $ident, true, 'ok');
             Auth::login($u);
             redirect(url('share'));
         }
