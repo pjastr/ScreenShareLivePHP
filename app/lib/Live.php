@@ -353,14 +353,42 @@ final class Live
 
     /* ---------- Konfiguracja WebRTC ---------- */
 
-    /** Serwery STUN/TURN dla RTCPeerConnection (ustawiane w panelu admina). */
-    public static function iceServers(): array
+    /** Poprawne adresy STUN z tekstu/listy (maks. 6). */
+    public static function cleanStun($list): array
+    {
+        $items = is_array($list) ? $list : (preg_split('/[\s,]+/', (string)$list) ?: []);
+        $out = [];
+        foreach ($items as $u) {
+            $u = trim((string)$u);
+            if (preg_match('#^stuns?:[A-Za-z0-9.\-]+(:\d{1,5})?$#', $u) && !in_array($u, $out, true)) {
+                $out[] = $u;
+            }
+        }
+        return array_slice($out, 0, 6);
+    }
+
+    /** Adresy STUN obowiązujące w transmisji (zmienione przez nauczyciela albo z ustawień admina). */
+    public static function stunList(?array $stream = null): array
+    {
+        if ($stream && isset($stream['ice']) && $stream['ice'] !== null) {
+            return self::cleanStun(json_decode((string)$stream['ice'], true) ?: []);
+        }
+        return self::cleanStun((string)Settings::get('live_ice_servers', ''));
+    }
+
+    /** Zmiana serwerów STUN w trakcie transmisji. Zwraca nowy numer zmiany. */
+    public static function setStreamStun(array $s, array $urls): int
+    {
+        DB::run('UPDATE {streams} SET `ice` = ?, `ice_rev` = `ice_rev` + 1 WHERE `id` = ?', [json_encode(self::cleanStun($urls)), (int)$s['id']]);
+        return (int)DB::value('SELECT `ice_rev` FROM {streams} WHERE `id` = ?', [(int)$s['id']]);
+    }
+
+    /** Serwery STUN/TURN dla RTCPeerConnection (STUN: transmisja lub admin, TURN: admin). */
+    public static function iceServers(?array $stream = null): array
     {
         $out = [];
-        foreach (preg_split('/[\s,]+/', (string)Settings::get('live_ice_servers', '')) ?: [] as $u) {
-            if (preg_match('#^stuns?:[A-Za-z0-9.\-]+(:\d+)?$#', $u)) {
-                $out[] = ['urls' => $u];
-            }
+        foreach (self::stunList($stream) as $u) {
+            $out[] = ['urls' => $u];
         }
         $turn = trim((string)Settings::get('live_turn_url', ''));
         if ($turn !== '') {

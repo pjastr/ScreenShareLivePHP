@@ -236,6 +236,17 @@ switch ($action) {
         }
         json_out(['seq' => Live::storeFrame((int)$s['id'], $mime, $data)]);
 
+    case 'pub.ice':
+        // nauczyciel zmienia serwery STUN w trakcie transmisji
+        require_post($isPost);
+        $in = input();
+        $s = publisher_stream($in);
+        $urls = Live::cleanStun($in['stun'] ?? []);
+        $rev = Live::setStreamStun($s, $urls);
+        $s = Live::find((int)$s['id']);
+        json_out(['ice' => Live::iceServers($s), 'stun' => Live::stunList($s), 'ice_rev' => $rev,
+            'frames_viewers' => (int)DB::value("SELECT COUNT(*) FROM {viewers} WHERE `stream_id` = ? AND `status` = 'active' AND `mode` = 'frames'", [(int)$s['id']])]);
+
     case 'pub.extend':
         require_post($isPost);
         $in = input();
@@ -292,7 +303,8 @@ switch ($action) {
         $_SESSION['live_tokens'] = array_slice(array_merge((array)($_SESSION['live_tokens'] ?? []), [$v['token']]), -10);
         // nauczyciel dostaje sygnał "hello" i wysyła ofertę połączenia
         Live::sendSignal((int)$s['id'], (int)$v['id'], 1, 'hello', null);
-        json_out(stream_state($s) + ['token' => $v['token'], 'viewer' => (int)$v['id'], 'stream' => Live::publicInfo($s, true)]);
+        json_out(stream_state($s) + ['token' => $v['token'], 'viewer' => (int)$v['id'], 'stream' => Live::publicInfo($s, true),
+            'ice' => Live::iceServers($s), 'ice_rev' => (int)($s['ice_rev'] ?? 0)]);
 
     case 'view.poll':
         require_post($isPost);
@@ -306,6 +318,8 @@ switch ($action) {
         json_out(stream_state($s) + [
             'signals' => Live::takeSignals((int)$s['id'], 0, (int)$v['id']),
             'pub_online' => Live::ts($s['pub_seen_at']) > time() - 10,
+            'ice_rev' => (int)($s['ice_rev'] ?? 0),
+            'ice' => (int)($in['ir'] ?? -1) !== (int)($s['ice_rev'] ?? 0) ? Live::iceServers($s) : null,
             'viewers' => Live::viewerCount((int)$s['id']),
         ]);
 

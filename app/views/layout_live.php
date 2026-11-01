@@ -25,6 +25,7 @@ $s = $liveCfg['stream'];
           <button type="button" class="menu-item" data-vq="<?= $lv ?>"><?= icon('check', 'mi-check') ?><span><?= e(__('live.vq.' . $lv)) ?><small class="muted"><?= e(__('live.vq.' . $lv . '_hint')) ?></small></span></button>
           <?php endforeach; ?>
           <div class="menu-sep"></div>
+          <button type="button" class="menu-item" id="btn-retry-menu" hidden><?= icon('refresh') ?><span><?= e(__('live.view.retry_rtc')) ?><small class="muted"><?= e(__('live.view.retry_rtc_hint')) ?></small></span></button>
           <button type="button" class="menu-item" id="btn-fit"><?= icon('aspect-ratio') ?><span id="fit-label"><?= e(__('live.view.actual_size')) ?></span></button>
           <button type="button" class="menu-item" id="btn-stats"><?= icon('chart-bar') ?><span><?= e(__('live.stats')) ?></span></button>
         </div>

@@ -65,6 +65,11 @@ na zwykłym hostingu współdzielonym. Licencja: **MIT**.
   utracone pakiety, jitter, opóźnienie i typ połączenia (LAN / P2P / TURN).
 - Przy 25 widzach komputer nauczyciela koduje obraz osobno dla każdego widza, a łącze wysyła
   25 strumieni. Gdy statystyki pokazują ograniczenie „procesor” lub „łącze”, wybierz niższy preset.
+- **Nakładka z kodem** dla nauczyciela: małe okno z adresem strony i kodem dołączenia (w Chrome/Edge
+  zawsze na wierzchu – przeciągnij je w lewy dolny róg nad pasek zadań; w innych przeglądarkach
+  otwiera się w lewym dolnym rogu). Gdy udostępniany jest cały ekran, uczniowie też ją widzą.
+- **Serwery STUN można zmienić w trakcie transmisji** (gotowe zestawy, własna lista, test) –
+  uczniowie w trybie zapasowym od razu ponawiają połączenie płynne.
 - **Kodek wybiera nauczyciel przy rozpoczęciu transmisji** (domyślny ustawia administrator).
 - Zamknięcie karty przez nauczyciela kończy transmisję po ok. 10 s (odświeżenie strony jej nie przerywa).
 - W trybie zapasowym statystyki pokazują m.in. klatki/s, przepływność, rozmiar i wiek klatki

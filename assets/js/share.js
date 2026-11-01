@@ -247,6 +247,7 @@
       if (r.code !== code) setCode(r.code);
       needFrames = !!r.need_frames;
       (r.signals || []).forEach(handle);
+      notifyFallback(r.viewers || []);
       viewers = r.viewers || [];
       var ids = {};
       viewers.forEach(function (v) {
@@ -315,6 +316,7 @@
     if (!running) return;
     var left = ends - (Date.now() / 1000 + skew);
     $('remain').textContent = fmtLeft(left);
+    updateOverlay(fmtLeft(left));
     $('btn-extend').disabled = cap - ends < 60;
     $('btn-extend').title = cap - ends < 60 ? t('live.extend_max', { n: cfg.maxMinutes }) : '';
     if (left < 300 && left > 0 && !warned5) { warned5 = true; App.toast(t('live.ends_soon'), 'info', null, 8000); }
@@ -437,6 +439,7 @@
       $('st-src').textContent = local ? src.w + '×' + src.h + (src.fps ? ' · ' + Math.round(src.fps) + ' ' + t('live.unit.fps') : '') : '—';
       $('st-sent').textContent = best ? best.w + '×' + best.h + ' · ' + Math.round(best.fps) + ' ' + t('live.unit.fps') : '—';
       $('st-codec').textContent = Object.keys(codecs).join(', ') || '—';
+      $('st-stun').textContent = (cfg.stun || []).map(function (u) { return u.replace(/^stuns?:/, ''); }).join(', ') || t('live.ice.none');
       $('st-rtt').textContent = rtts.length ? Math.round(rtts.reduce(function (a, b) { return a + b; }, 0) / rtts.length * 1000) + ' ms' : '—';
       var lim = Object.keys(limits).sort(function (a, b) { return limits[b] - limits[a]; })[0];
       $('st-limit').textContent = lim ? t('live.limit.' + lim) + (n > 1 ? ' (' + limits[lim] + '/' + n + ')' : '') : t('live.limit.none');
@@ -500,6 +503,7 @@
   }
 
   function stopAll() {
+    closeOverlay();
     running = false;
     clearTimeout(pollTimer); clearTimeout(frameTimer); frameTimer = null;
     Object.keys(peers).forEach(function (id) { closePeer(+id, false); });
@@ -599,6 +603,121 @@
   window.addEventListener('beforeunload', function (e) {
     if (running && local) { e.preventDefault(); e.returnValue = ''; }
   });
+
+  /* ---------- Serwery STUN w trakcie transmisji ---------- */
+  var fbSeen = {};
+  /** Komunikat, gdy uczeń przechodzi na tryb zapasowy – z szybkim dostępem do zmiany STUN. */
+  function notifyFallback(list) {
+    list.forEach(function (v) {
+      if (v.mode === 'frames' && !fbSeen[v.id]) {
+        fbSeen[v.id] = true;
+        App.toast(t('live.ice.viewer_fallback', { name: v.name || t('live.viewer_anon', { n: v.id }) }), 'info',
+          [{ label: t('live.ice.change'), onClick: openIce }], 10000);
+      }
+      if (v.mode !== 'frames') delete fbSeen[v.id];
+    });
+  }
+  function openIce() {
+    $('ice-text').value = (cfg.stun || []).join('\n');
+    $('ice-test-res').textContent = '';
+    $('ice-dlg').showModal();
+  }
+  document.addEventListener('click', function (e) {
+    if (e.target.closest('[data-open-ice]')) { openIce(); return; }
+    var pr = e.target.closest('[data-ice-preset]');
+    if (pr) { $('ice-text').value = pr.getAttribute('data-ice-preset'); $('ice-test-res').textContent = ''; }
+  });
+  function stunFromText() {
+    return $('ice-text').value.split(/[\s,]+/).map(function (u) { return u.trim(); }).filter(function (u) { return /^stuns?:[A-Za-z0-9.\-]+(:\d{1,5})?$/.test(u); });
+  }
+  /** Test: czy przez podane serwery STUN przeglądarka uzyskuje adres publiczny (kandydat srflx). */
+  function testStun(urls) {
+    return new Promise(function (resolve) {
+      if (!urls.length) return resolve({ ok: false, empty: true });
+      var t0 = performance.now(), done = false, pc;
+      try { pc = new RTCPeerConnection({ iceServers: urls.map(function (u) { return { urls: u }; }) }); } catch (e) { return resolve({ ok: false }); }
+      var finish = function (res) { if (done) return; done = true; try { pc.close(); } catch (e) {} resolve(res); };
+      pc.onicecandidate = function (e) {
+        if (e.candidate && / typ srflx /.test(e.candidate.candidate)) finish({ ok: true, ms: Math.round(performance.now() - t0), ip: (e.candidate.address || e.candidate.candidate.split(' ')[4]) });
+        if (!e.candidate) finish({ ok: false });
+      };
+      pc.createDataChannel('t');
+      pc.createOffer().then(function (o) { return pc.setLocalDescription(o); }).catch(function () { finish({ ok: false }); });
+      setTimeout(function () { finish({ ok: false }); }, 5000);
+    });
+  }
+  $('ice-test-btn').addEventListener('click', function () {
+    var res = $('ice-test-res'), urls = stunFromText();
+    res.className = 'small muted'; res.textContent = t('live.ice.testing');
+    testStun(urls).then(function (r) {
+      res.className = 'small ' + (r.ok ? 'ok-text' : 'warn-text');
+      res.textContent = r.empty ? t('live.ice.test_empty') : (r.ok ? t('live.ice.test_ok', { ms: r.ms, ip: r.ip }) : t('live.ice.test_fail'));
+    });
+  });
+  $('ice-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var urls = stunFromText();
+    if ($('ice-text').value.trim() && !urls.length) { App.toast(t('live.ice.invalid'), 'error'); return; }
+    App.api('pub.ice', { sid: sid, pub: pub, stun: urls }).then(function (r) {
+      cfg.ice = r.ice; cfg.stun = r.stun;
+      $('ice-dlg').close();
+      $('st-stun').textContent = (cfg.stun || []).map(function (u) { return u.replace(/^stuns?:/, ''); }).join(', ') || t('live.ice.none');
+      App.toast(r.frames_viewers ? t('live.ice.applied_retry', { n: r.frames_viewers }) : t('live.ice.applied'), 'success', null, 6000);
+    }).catch(function (err) { App.toast(err.message, 'error'); });
+  });
+
+  /* ---------- Nakładka z kodem i adresem (zawsze na wierzchu / w lewym dolnym rogu ekranu) ---------- */
+  var ovWin = null, ovIsPip = false;
+  var OV_CSS = 'html,body{margin:0;height:100%;background:#111522;color:#eef0f7;font:14px/1.3 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}' +
+    '.ov{display:flex;align-items:center;gap:14px;height:100%;padding:8px 14px;box-sizing:border-box}' +
+    '.dot{width:10px;height:10px;border-radius:50%;background:#ff5d5d;flex:none;animation:b 1.6s infinite}@keyframes b{50%{opacity:.3}}' +
+    '.txt{display:flex;flex-direction:column;min-width:0;flex:1}.lbl{color:#a8aec0;font-size:12px}' +
+    '.url{font-weight:650;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#9d9dff}' +
+    '.code{font:800 30px/1 ui-monospace,Consolas,monospace;letter-spacing:.06em;white-space:nowrap}' +
+    '.meta{color:#a8aec0;font-size:12px;white-space:nowrap}';
+  function ovHtml() {
+    var host = cfg.viewerUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    return '<div class="ov"><span class="dot"></span><div class="txt"><span class="lbl">' + App.esc(t('live.overlay_join')) + '</span>' +
+      '<span class="url">' + App.esc(host) + '</span><span class="meta" id="ov-meta"></span></div>' +
+      '<div class="code" id="ov-code">' + App.esc(fmtCode(code)) + '</div></div>';
+  }
+  function fillOverlay(doc) {
+    doc.title = t('live.overlay') + ' – ' + fmtCode(code);
+    var st = doc.createElement('style'); st.textContent = OV_CSS; doc.head.appendChild(st);
+    doc.body.innerHTML = ovHtml();
+  }
+  function updateOverlay(left) {
+    if (!ovWin || ovWin.closed) { ovWin = null; return; }
+    try {
+      var d = ovWin.document, c = d.getElementById('ov-code'), m = d.getElementById('ov-meta');
+      if (c && c.textContent !== fmtCode(code)) c.textContent = fmtCode(code);
+      if (m) m.textContent = '⏳ ' + left + '  ·  👥 ' + viewers.length + ' / ' + maxV;
+    } catch (e) {}
+  }
+  function closeOverlay() { try { if (ovWin && !ovWin.closed) ovWin.close(); } catch (e) {} ovWin = null; }
+  function openOverlay() {
+    if (ovWin && !ovWin.closed) { closeOverlay(); return; }
+    var W = 380, H = 96;
+    if (window.documentPictureInPicture && documentPictureInPicture.requestWindow) {
+      // Chrome/Edge: okno zawsze na wierzchu (można je przeciągnąć w dowolne miejsce ekranu)
+      documentPictureInPicture.requestWindow({ width: W, height: H, disallowReturnToOpener: true }).then(function (w) {
+        ovWin = w; ovIsPip = true; fillOverlay(w.document);
+        w.addEventListener('pagehide', function () { ovWin = null; });
+        App.toast(t('live.overlay_pip'), 'info', null, 7000);
+      }).catch(function () { openPopup(W, H); });
+    } else openPopup(W, H);
+  }
+  function openPopup(W, H) {
+    // inne przeglądarki: małe okno w lewym dolnym rogu, tuż nad paskiem zadań
+    var sc = window.screen || {}, left = (sc.availLeft || 0) + 8, top = (sc.availTop || 0) + (sc.availHeight || 800) - H - 60;
+    var w = window.open('', 'sslive-overlay', 'popup=yes,width=' + W + ',height=' + H + ',left=' + left + ',top=' + top);
+    if (!w) { App.toast(t('live.overlay_blocked'), 'error'); return; }
+    ovWin = w; ovIsPip = false;
+    w.document.open(); w.document.write('<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>'); w.document.close();
+    fillOverlay(w.document);
+    try { w.moveTo(left, top); } catch (e) {}
+  }
+  $('btn-overlay').addEventListener('click', openOverlay);
 
   /* Kodeki, których ta przeglądarka nie potrafi wysyłać, są oznaczone i wyłączone. */
   (function () {

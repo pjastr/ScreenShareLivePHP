@@ -3,6 +3,22 @@
 Każda zmiana podnosi numer wersji w `app/version.php` (`APP_VERSION`).
 Format: MAJOR.MINOR.PATCH – poprawki zwiększają PATCH, nowe funkcje MINOR.
 
+## 1.3.0 — 2026-11-01
+- **Nakładka dla nauczyciela** (przycisk „Nakładka” przy kodzie): małe okno z adresem strony,
+  kodem dołączenia, pozostałym czasem i liczbą widzów. W Chrome/Edge jest zawsze na wierzchu
+  (Document Picture-in-Picture) – można je przeciągnąć w lewy dolny róg nad pasek zadań;
+  w innych przeglądarkach otwiera się okienko w lewym dolnym rogu ekranu, nad paskiem zadań.
+  Zamyka się samo po zakończeniu transmisji.
+- **Zmiana serwerów STUN w trakcie transmisji**: okno z gotowymi zestawami (Google, Cloudflare,
+  oba, bez STUN), własną listą i testem („Sprawdź serwery” – czy uzyskano adres publiczny).
+  Uczniowie w trybie zapasowym automatycznie ponawiają wtedy połączenie płynne; połączeni nie są
+  rozłączani. Nauczyciel dostaje powiadomienie, gdy uczeń przechodzi na tryb zapasowy
+  (z przyciskiem „Zmień STUN”); bieżące serwery widać w statystykach.
+- Poprawka: na telefonie w poziomie obraz w trybie zapasowym zasłaniał pasek z przyciskiem
+  „Spróbuj połączenia płynnego”. Obraz mieści się teraz w ekranie, pasek jest zwarty na niskich
+  ekranach, a opcja jest też w menu jakości.
+- Wymaga aktualizacji bazy danych (migracja 003 – serwery STUN transmisji).
+
 ## 1.2.0 — 2026-11-01
 - **Powiadomienia e-mail** o rozpoczęciu transmisji (Panel admina → Ustawienia → Powiadomienia e-mail):
   wyłączone / tylko pierwsza transmisja danego dnia / każda transmisja; adresaci (domyślnie wszyscy

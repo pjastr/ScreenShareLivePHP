@@ -30,7 +30,8 @@ $cfg = [
     'code' => $own ? $active['code'] : null,
     'maxViewers' => $own ? (int)$active['max_viewers'] : $maxV,
     'pubRecent' => $own && Live::ts($active['pub_seen_at']) > time() - 6,
-    'ice' => Live::iceServers(),
+    'ice' => Live::iceServers($own ? $active : null),
+    'stun' => Live::stunList($own ? $active : null),
     'qualities' => Live::qualities(),
     'quality' => isset(Live::qualities()[$quality]) ? $quality : 'balanced',
     'codec' => $own && in_array((string)($active['codec'] ?? ''), Live::codecs(), true) ? $active['codec'] : Live::codec(),
@@ -177,7 +178,8 @@ ob_start(); ?>
           <div><span class="muted small"><?= e(__('live.st.limit')) ?></span><strong id="st-limit">—</strong></div>
         </div>
         <div id="st-fb" hidden>
-          <h3 class="stats-sub"><?= icon('wifi-off') ?><?= e(__('live.st.fallback')) ?></h3>
+          <h3 class="stats-sub"><?= icon('wifi-off') ?><?= e(__('live.st.fallback')) ?>
+            <button class="btn btn-sm" type="button" data-open-ice><?= icon('server-2') ?><?= e(__('live.ice.change')) ?></button></h3>
           <div class="stats-grid">
             <div><span class="muted small"><?= e(__('live.st.fb_viewers')) ?></span><strong id="st-fb-n">—</strong></div>
             <div><span class="muted small"><?= e(__('live.st.fb_rate')) ?></span><strong id="st-fb-fps">—</strong></div>
@@ -189,6 +191,9 @@ ob_start(); ?>
           </div>
         </div>
         <p class="small muted stats-hint" id="st-hint" hidden></p>
+        <div class="ice-row"><span class="muted small"><?= icon('server-2') ?><?= e(__('live.ice.current')) ?></span>
+          <code id="st-stun">—</code>
+          <button class="btn btn-sm btn-ghost" type="button" data-open-ice><?= icon('edit') ?><?= e(__('live.ice.change')) ?></button></div>
       </div>
     </section>
     <aside class="live-side">
@@ -198,6 +203,7 @@ ob_start(); ?>
         <div class="code-url"><span id="code-url"><?= e(Live::viewerUrl()) ?></span></div>
         <div class="row-actions">
           <button class="btn btn-sm btn-primary" type="button" id="btn-present"><?= icon('qrcode') ?><?= e(__('live.present')) ?></button>
+          <button class="btn btn-sm" type="button" id="btn-overlay" title="<?= e(__('live.overlay_hint')) ?>"><?= icon('picture-in-picture-on') ?><?= e(__('live.overlay')) ?></button>
           <button class="btn btn-sm" type="button" id="btn-copy-link"><?= icon('link') ?><?= e(__('live.copy_link')) ?></button>
           <button class="btn btn-sm btn-ghost" type="button" id="btn-new-code" title="<?= e(__('live.new_code_hint')) ?>"><?= icon('refresh') ?><?= e(__('live.new_code')) ?></button>
         </div>
@@ -209,6 +215,23 @@ ob_start(); ?>
     </aside>
   </div>
 </div>
+
+<dialog class="modal" id="ice-dlg">
+  <form class="modal-box" method="dialog" id="ice-form">
+    <div class="modal-head"><h2><?= icon('server-2') ?> <?= e(__('live.ice.title')) ?></h2><button type="button" class="btn-icon" data-modal-close aria-label="<?= e(__('common.close')) ?>"><?= icon('x') ?></button></div>
+    <p class="muted small" style="margin:0"><?= e(__('live.ice.text')) ?></p>
+    <div class="ice-presets">
+      <?php foreach (['google' => "stun:stun.l.google.com:19302\nstun:stun1.l.google.com:19302", 'cloudflare' => 'stun:stun.cloudflare.com:3478', 'mixed' => "stun:stun.cloudflare.com:3478\nstun:stun.l.google.com:19302", 'none' => ''] as $k => $v): ?>
+      <button type="button" class="btn btn-sm" data-ice-preset="<?= e($v) ?>"><?= e(__('live.ice.preset.' . $k)) ?></button>
+      <?php endforeach; ?>
+    </div>
+    <label class="field"><span><?= e(__('admin.live.stun')) ?></span>
+      <textarea id="ice-text" rows="4" class="code-area" spellcheck="false" placeholder="stun:stun.example.org:3478"></textarea>
+      <small class="hint"><?= e(__('live.ice.hint')) ?></small></label>
+    <div class="ice-test"><button type="button" class="btn btn-sm" id="ice-test-btn"><?= icon('antenna-bars-5') ?><?= e(__('live.ice.test')) ?></button><span class="small" id="ice-test-res"></span></div>
+    <div class="modal-foot"><button type="button" class="btn btn-ghost" data-modal-close><?= e(__('common.cancel')) ?></button><button type="submit" class="btn btn-primary"><?= e(__('live.ice.apply')) ?></button></div>
+  </form>
+</dialog>
 
 <dialog class="modal present-modal" id="present">
   <div class="modal-box present-box">

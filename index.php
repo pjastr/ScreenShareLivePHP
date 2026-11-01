@@ -81,7 +81,8 @@ if ($hasAccess) {
     $liveCfg = [
         'sid' => (int)$stream['id'],
         'stream' => Live::publicInfo($stream, true),
-        'ice' => Live::iceServers(),
+        'ice' => Live::iceServers($stream),
+        'iceRev' => (int)($stream['ice_rev'] ?? 0),
         'fallback' => Settings::bool('live_fallback'),
         'name' => (string)($acc['name'] ?? ''),
     ];

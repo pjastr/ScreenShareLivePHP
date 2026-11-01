@@ -83,6 +83,8 @@ return [
   'aspect-ratio' => 'O<path d="M3 5m0 2a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z" /> <path d="M7 12v-3h3" /> <path d="M17 12v3h-3" />',
   'gauge' => 'O<path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /> <path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" /> <path d="M13.41 10.59l2.59 -2.59" /> <path d="M7 12a5 5 0 0 1 5 -5" />',
   'cpu' => 'O<path d="M5 5m0 1a1 1 0 0 1 1 -1h12a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-12a1 1 0 0 1 -1 -1z" /> <path d="M9 9h6v6h-6z" /> <path d="M3 10h2" /> <path d="M3 14h2" /> <path d="M10 3v2" /> <path d="M14 3v2" /> <path d="M21 10h-2" /> <path d="M21 14h-2" /> <path d="M14 21v-2" /> <path d="M10 21v-2" />',
+  'picture-in-picture-on' => 'O<path d="M11 19h-6a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v4" /> <path d="M14 14m0 1a1 1 0 0 1 1 -1h5a1 1 0 0 1 1 1v3a1 1 0 0 1 -1 1h-5a1 1 0 0 1 -1 -1z" /> <path d="M7 9l4 4" /> <path d="M8 13h3v-3" />',
+  'server-2' => 'O<path d="M3 4m0 3a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v2a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3z" /> <path d="M3 12m0 3a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v2a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3z" /> <path d="M7 8l0 .01" /> <path d="M7 16l0 .01" /> <path d="M11 8h6" /> <path d="M11 16h6" />',
   'circle-filled' => 'F<path d="M7 3.34a10 10 0 1 1 -4.995 8.984l-.005 -.324l.005 -.324a10 10 0 0 1 4.995 -8.336z" />',
   'player-play-filled' => 'F<path d="M6 4v16a1 1 0 0 0 1.524 .852l13 -8a1 1 0 0 0 0 -1.704l-13 -8a1 1 0 0 0 -1.524 .852z" />',
 ];

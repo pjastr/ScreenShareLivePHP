@@ -15,6 +15,7 @@
   var finished = false, pubOnline = true;
   var ends = cfg.stream.ends, skew = 0;
   var outbox = [], flushTimer = null, pollTimer = null, frameTimer = null, connectTimer = null, discTimer = null;
+  var iceRev = cfg.iceRev || 0;
   var failures = 0, frameSeq = 0, frameUrl = null, gotFrame = false, queue = Promise.resolve();
 
   /* ---------- Interfejs ---------- */
@@ -155,6 +156,7 @@
     }
     mode = 'frames';
     $('mode-note').hidden = false;
+    $('btn-retry-menu').hidden = false;
     setState('frames');
     poll(true);
     frameLoop();
@@ -163,6 +165,7 @@
     mode = 'webrtc';
     clearTimeout(frameTimer); frameTimer = null;
     $('mode-note').hidden = true;
+    $('btn-retry-menu').hidden = true;
     frameImg.hidden = true; video.hidden = false;
   }
   /* Liczniki trybu zapasowego (statystyki). */
@@ -203,6 +206,7 @@
     if (mode !== 'frames') setState('connecting');
   }
   $('btn-retry').addEventListener('click', function () { retryRtc(); App.toast(t('live.view.retrying')); });
+  $('btn-retry-menu').addEventListener('click', function () { retryRtc(); App.toast(t('live.view.retrying')); });
 
   /* ---------- Odpytywanie serwera ---------- */
   function schedule() {
@@ -214,12 +218,17 @@
   function poll(once) {
     if (finished || !token) return;
     var wire = mode === 'frames' ? 'connected' : (state === 'connected' ? 'connected' : (state === 'waiting' ? 'waiting' : 'connecting'));
-    App.api('view.poll', { t: token, state: wire, mode: mode, st: summary }).then(function (r) {
+    App.api('view.poll', { t: token, state: wire, mode: mode, st: summary, ir: iceRev }).then(function (r) {
       if (r.status !== 'live') return status(r.status, r);
       skew = r.now - Date.now() / 1000;
       ends = r.ends;
       $('vcount').textContent = r.viewers;
       pubOnline = !!r.pub_online;
+      if (r.ice && r.ice_rev !== iceRev) {
+        // nauczyciel zmienił serwery STUN – w trybie zapasowym spróbuj ponownie połączenia płynnego
+        iceRev = r.ice_rev; cfg.ice = r.ice;
+        if (mode === 'frames') { App.toast(t('live.view.ice_changed'), 'info', null, 6000); retryRtc(); }
+      }
       if (!pubOnline && state !== 'connected' && mode !== 'frames') setState('waiting');
       (r.signals || []).forEach(function (s) { queue = queue.then(function () { return handle(s); }).catch(function (e) { console.warn(e); }); });
     }).catch(function (e) {
@@ -246,6 +255,7 @@
     App.api('view.join', {}).then(function (r) {
       if (r.status !== 'live') return status(r.status, r);
       token = r.token;
+      if (r.ice) { cfg.ice = r.ice; iceRev = r.ice_rev; }
       skew = r.now - Date.now() / 1000;
       ends = r.ends;
       setState('connecting');
