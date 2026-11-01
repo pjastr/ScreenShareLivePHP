@@ -33,7 +33,7 @@ $cfg = [
     'ice' => Live::iceServers(),
     'qualities' => Live::qualities(),
     'quality' => isset(Live::qualities()[$quality]) ? $quality : 'balanced',
-    'codec' => Live::codec(),
+    'codec' => $own && in_array((string)($active['codec'] ?? ''), Live::codecs(), true) ? $active['codec'] : Live::codec(),
     'viewerUrl' => Live::viewerUrl(),
     'maxMinutes' => Live::MAX_MINUTES,
 ];
@@ -95,6 +95,11 @@ ob_start(); ?>
           <?php endforeach; ?>
         </div>
       </div>
+      <label class="field"><span><?= e(__('admin.live.codec')) ?></span>
+        <select name="codec" id="codec-select">
+          <?php foreach (Live::codecs() as $c): ?><option value="<?= e($c) ?>" <?= Live::codec() === $c ? 'selected' : '' ?>><?= e(__('admin.live.codec.' . $c)) ?></option><?php endforeach; ?>
+        </select>
+        <small class="hint"><?= e(__('live.codec_hint')) ?></small></label>
       <label class="switch-field">
         <input type="checkbox" name="audio" value="1">
         <span class="switch" aria-hidden="true"></span>
@@ -170,6 +175,18 @@ ob_start(); ?>
           <div><span class="muted small"><?= e(__('live.st.codec')) ?></span><strong id="st-codec">—</strong></div>
           <div><span class="muted small"><?= e(__('live.st.rtt')) ?></span><strong id="st-rtt">—</strong></div>
           <div><span class="muted small"><?= e(__('live.st.limit')) ?></span><strong id="st-limit">—</strong></div>
+        </div>
+        <div id="st-fb" hidden>
+          <h3 class="stats-sub"><?= icon('wifi-off') ?><?= e(__('live.st.fallback')) ?></h3>
+          <div class="stats-grid">
+            <div><span class="muted small"><?= e(__('live.st.fb_viewers')) ?></span><strong id="st-fb-n">—</strong></div>
+            <div><span class="muted small"><?= e(__('live.st.fb_rate')) ?></span><strong id="st-fb-fps">—</strong></div>
+            <div><span class="muted small"><?= e(__('live.st.frame_size')) ?></span><strong id="st-fb-size">—</strong></div>
+            <div><span class="muted small"><?= e(__('live.st.fb_upload')) ?></span><strong id="st-fb-up">—</strong></div>
+            <div><span class="muted small"><?= e(__('live.st.fb_sent')) ?></span><strong id="st-fb-sent">—</strong></div>
+            <div><span class="muted small"><?= e(__('live.st.fb_server')) ?></span><strong id="st-fb-srv">—</strong></div>
+            <div><span class="muted small"><?= e(__('live.st.fb_age')) ?></span><strong id="st-fb-age">—</strong></div>
+          </div>
         </div>
         <p class="small muted stats-hint" id="st-hint" hidden></p>
       </div>

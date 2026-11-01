@@ -60,7 +60,7 @@ final class Live
         $now = time();
         $ended = DB::run("UPDATE {streams} SET `status` = 'ended', `active_slot` = NULL, `ended_at` = ?, `end_reason` = 'time'
             WHERE `active_slot` = 1 AND `ends_at` <= ?", [self::at($now), self::at($now)])->rowCount();
-        $ended += DB::run("UPDATE {streams} SET `status` = 'ended', `active_slot` = NULL, `ended_at` = ?, `end_reason` = 'lost'
+        $ended += DB::run("UPDATE {streams} SET `status` = 'ended', `active_slot` = NULL, `ended_at` = ?, `end_reason` = IF(`pub_token` IS NULL, 'closed', 'lost')
             WHERE `active_slot` = 1 AND `pub_seen_at` < ?", [self::at($now), self::at($now - self::PUB_TIMEOUT)])->rowCount();
         DB::run("UPDATE {viewers} SET `status` = 'left' WHERE `status` = 'active' AND `last_seen_at` < ?", [self::at($now - self::VIEWER_TIMEOUT)]);
         if ($ended > 0 || random_int(1, 200) === 1) {
@@ -107,7 +107,7 @@ final class Live
     /**
      * Rozpoczyna transmisję. Zwraca wiersz transmisji albo null, gdy trwa już inna transmisja.
      */
-    public static function start(int $userId, string $title, int $minutes, int $maxViewers, bool $audio): ?array
+    public static function start(int $userId, string $title, int $minutes, int $maxViewers, bool $audio, string $codec = '', string $quality = ''): ?array
     {
         self::sweep();
         $minutes = max(self::MIN_MINUTES, min(self::MAX_MINUTES, $minutes));
@@ -122,6 +122,8 @@ final class Live
                 'active_slot' => 1,
                 'max_viewers' => $maxViewers,
                 'audio' => $audio ? 1 : 0,
+                'codec' => in_array($codec, self::codecs(), true) ? $codec : self::codec(),
+                'quality' => isset(self::qualities()[$quality]) ? $quality : (string)Settings::get('live_quality', 'balanced'),
                 'pub_token' => self::token(),
                 'pub_seen_at' => self::at($now),
                 'started_at' => self::at($now),
@@ -142,6 +144,19 @@ final class Live
         $t = self::token();
         DB::update('streams', ['pub_token' => $t, 'pub_seen_at' => DB::now()], '`id` = ?', [(int)$s['id']]);
         return $t;
+    }
+
+    /** Czas na powrót nauczyciela po zamknięciu/odświeżeniu karty (potem transmisja się kończy). */
+    public const BYE_GRACE = 10;
+
+    /**
+     * Karta nauczyciela została zamknięta: transmisja zakończy się po BYE_GRACE sekundach,
+     * chyba że nauczyciel wróci (np. to było tylko odświeżenie strony).
+     */
+    public static function bye(array $s): void
+    {
+        // pub_token = NULL oznacza "karta zamknięta" (powód zakończenia w historii); wznowienie nada nowy token
+        DB::update('streams', ['pub_seen_at' => self::at(time() - self::PUB_TIMEOUT + self::BYE_GRACE), 'pub_token' => null], '`id` = ?', [(int)$s['id']]);
     }
 
     public static function end(int $id, string $reason = 'manual'): void
@@ -176,7 +191,7 @@ final class Live
 
     public static function viewers(int $streamId): array
     {
-        return DB::all("SELECT `id`,`name`,`mode`,`state`,`joined_at`,`last_seen_at` FROM {viewers} WHERE `stream_id` = ? AND `status` = 'active' ORDER BY `id`", [$streamId]);
+        return DB::all("SELECT `id`,`name`,`mode`,`state`,`stats`,`joined_at`,`last_seen_at` FROM {viewers} WHERE `stream_id` = ? AND `status` = 'active' ORDER BY `id`", [$streamId]);
     }
 
     public static function viewerCount(int $streamId): int
@@ -231,9 +246,19 @@ final class Live
         return DB::row('SELECT * FROM {viewers} WHERE `token` = ?', [$token]);
     }
 
-    public static function touchViewer(array $v, ?string $state = null, ?string $mode = null): void
+    public static function touchViewer(array $v, ?string $state = null, ?string $mode = null, ?array $stats = null): void
     {
         $data = ['last_seen_at' => DB::now()];
+        if ($stats !== null) {
+            // tylko liczby z dozwolonych pól – trafiają do panelu nauczyciela
+            $clean = [];
+            foreach (['fps', 'kbps', 'age', 'rtt', 'res', 'loss', 'kb'] as $k) {
+                if (isset($stats[$k]) && is_scalar($stats[$k])) {
+                    $clean[$k] = $k === 'res' ? preg_replace('/[^0-9x]/', '', (string)$stats[$k]) : round((float)$stats[$k], 1);
+                }
+            }
+            $data['stats'] = substr(json_encode($clean), 0, 255);
+        }
         if ($state !== null && in_array($state, ['waiting', 'connecting', 'connected', 'failed'], true)) {
             $data['state'] = $state;
         }
@@ -302,11 +327,17 @@ final class Live
 
     /* ---------- Klatki (tryb zapasowy) ---------- */
 
+    public static function nowMs(): int
+    {
+        return (int)floor(microtime(true) * 1000);
+    }
+
     public static function storeFrame(int $streamId, string $mime, string $data): int
     {
-        DB::run('INSERT INTO {frames} (`stream_id`,`seq`,`mime`,`data`,`updated_at`) VALUES (?,1,?,?,?)
-            ON DUPLICATE KEY UPDATE `seq` = `seq` + 1, `mime` = VALUES(`mime`), `data` = VALUES(`data`), `updated_at` = VALUES(`updated_at`)',
-            [$streamId, $mime, $data, DB::now()]);
+        DB::run('INSERT INTO {frames} (`stream_id`,`seq`,`ts_ms`,`bytes_total`,`mime`,`data`,`updated_at`) VALUES (?,1,?,?,?,?,?)
+            ON DUPLICATE KEY UPDATE `seq` = `seq` + 1, `ts_ms` = VALUES(`ts_ms`), `bytes_total` = `bytes_total` + VALUES(`bytes_total`),
+            `mime` = VALUES(`mime`), `data` = VALUES(`data`), `updated_at` = VALUES(`updated_at`)',
+            [$streamId, self::nowMs(), strlen($data), $mime, $data, DB::now()]);
         return (int)DB::value('SELECT `seq` FROM {frames} WHERE `stream_id` = ?', [$streamId]);
     }
 
@@ -317,7 +348,7 @@ final class Live
 
     public static function frame(int $streamId): ?array
     {
-        return DB::row('SELECT `seq`,`mime`,`data` FROM {frames} WHERE `stream_id` = ?', [$streamId]);
+        return DB::row('SELECT `seq`,`ts_ms`,`mime`,`data` FROM {frames} WHERE `stream_id` = ?', [$streamId]);
     }
 
     /* ---------- Konfiguracja WebRTC ---------- */
@@ -391,18 +422,23 @@ final class Live
         return $code !== null ? $u . '?code=' . $code : $u;
     }
 
-    /** Dane transmisji dla JS. */
-    public static function publicInfo(array $s): array
+    /** Dane transmisji dla JS. Widz nie dostaje loginu nauczyciela. */
+    public static function publicInfo(array $s, bool $forViewer = false): array
     {
-        return [
+        $out = [
             'id' => (int)$s['id'],
             'title' => (string)$s['title'],
-            'teacher' => (string)($s['username'] ?? ''),
             'started' => self::ts($s['started_at']),
             'ends' => self::ts($s['ends_at']),
             'cap' => self::capTs($s),
             'audio' => (int)$s['audio'] === 1,
             'live' => self::isLive($s),
+            'codec' => (string)($s['codec'] ?? ''),
+            'quality' => (string)($s['quality'] ?? ''),
         ];
+        if (!$forViewer) {
+            $out['teacher'] = (string)($s['username'] ?? '');
+        }
+        return $out;
     }
 }

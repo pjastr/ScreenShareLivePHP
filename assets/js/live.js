@@ -165,14 +165,22 @@
     $('mode-note').hidden = true;
     frameImg.hidden = true; video.hidden = false;
   }
+  /* Liczniki trybu zapasowego (statystyki). */
+  var fb = { got: 0, same: 0, errors: 0, bytes: 0, lastBytes: 0, lastFetch: 0, lastAge: -1, hist: [] };
   function frameLoop() {
     if (mode !== 'frames' || finished) return;
+    var t0 = performance.now();
     fetch(api + '?a=view.frame&t=' + token + '&s=' + frameSeq, { credentials: 'same-origin', cache: 'no-store' })
       .then(function (r) {
         if (r.status === 200 && (r.headers.get('Content-Type') || '').indexOf('image/') === 0) {
           frameSeq = parseInt(r.headers.get('X-Frame-Seq') || '0', 10);
+          var age = parseInt(r.headers.get('X-Frame-Age') || '-1', 10);
           return r.blob().then(function (b) {
-            lastFrameBytes = b.size;
+            var dt = performance.now() - t0;
+            fb.got++; fb.bytes += b.size; fb.lastBytes = b.size; fb.lastFetch = dt;
+            fb.lastAge = age >= 0 ? age + dt : -1;
+            fb.hist.push({ t: Date.now(), b: b.size });
+            while (fb.hist.length && fb.hist[0].t < Date.now() - 10000) fb.hist.shift();
             var u = URL.createObjectURL(b);
             frameImg.onload = function () { if (frameUrl) URL.revokeObjectURL(frameUrl); frameUrl = u; };
             frameImg.src = u;
@@ -180,9 +188,12 @@
             if (!gotFrame) { gotFrame = true; if (state === 'frames') hideOverlay(); }
           });
         }
+        if (r.status === 204) fb.same++;
+        else if (!r.ok) fb.errors++;
+        fb.lastFetch = performance.now() - t0;
         return null;
       })
-      .catch(function () {})
+      .catch(function () { fb.errors++; })
       .then(function () { frameTimer = setTimeout(frameLoop, 1000); });
   }
   function retryRtc() {
@@ -203,7 +214,7 @@
   function poll(once) {
     if (finished || !token) return;
     var wire = mode === 'frames' ? 'connected' : (state === 'connected' ? 'connected' : (state === 'waiting' ? 'waiting' : 'connecting'));
-    App.api('view.poll', { t: token, state: wire, mode: mode }).then(function (r) {
+    App.api('view.poll', { t: token, state: wire, mode: mode, st: summary }).then(function (r) {
       if (r.status !== 'live') return status(r.status, r);
       skew = r.now - Date.now() / 1000;
       ends = r.ends;
@@ -299,20 +310,50 @@
   window.addEventListener('resize', sizeActual);
 
   /* ---------- Statystyki odbioru ---------- */
-  var statsBox = $('stats'), statsOn = false, statsTimer = null, prevIn = null, lastFrameBytes = 0;
+  // Zbierane co sekundę (także przy ukrytym panelu) – skrót trafia do nauczyciela przy odpytywaniu.
+  var statsBox = $('stats'), statsOn = false, prevIn = null, summary = null, rows = [];
   function fmtRate(bps) {
     if (!(bps >= 0)) return '—';
     return bps >= 1e6 ? (bps / 1e6).toLocaleString(App.cfg.lang, { maximumFractionDigits: 1 }) + ' Mb/s' : Math.round(bps / 1000) + ' kb/s';
   }
-  function row(k, v) { return '<div><span>' + App.esc(t(k)) + '</span><b>' + App.esc(v) + '</b></div>'; }
-  function statsTick() {
+  function fmtMs(ms) { return ms >= 0 ? (ms >= 10000 ? (ms / 1000).toFixed(0) + ' s' : Math.round(ms) + ' ms') : '—'; }
+  function dispSize(el) {
+    var dpr = window.devicePixelRatio || 1;
+    return el.clientWidth ? Math.round(el.clientWidth * dpr) + '×' + Math.round(el.clientHeight * dpr) : '—';
+  }
+  function render() {
     if (!statsOn) return;
-    var disp = (video.clientWidth && video.videoWidth) ? Math.round(video.clientWidth * (window.devicePixelRatio || 1)) + '×' + Math.round(video.clientHeight * (window.devicePixelRatio || 1)) : '—';
-    if (mode === 'frames' || !pc) {
-      statsBox.innerHTML = row('live.st.mode', mode === 'frames' ? t('live.state.frames') : t('live.state.' + state)) +
-        (mode === 'frames' ? row('live.st.res', frameImg.naturalWidth ? frameImg.naturalWidth + '×' + frameImg.naturalHeight : '—') + row('live.st.frame_size', lastFrameBytes ? Math.round(lastFrameBytes / 1024) + ' KB' : '—') + row('live.st.fps', '~1') : '');
-      return;
-    }
+    statsBox.innerHTML = rows.map(function (r) {
+      return '<div' + (r[2] ? ' class="' + r[2] + '"' : '') + '><span>' + App.esc(t(r[0])) + '</span><b>' + App.esc(r[1]) + '</b></div>';
+    }).join('');
+  }
+  function collectFrames() {
+    var now = Date.now(), win = fb.hist.filter(function (h) { return h.t > now - 5000; });
+    var span = win.length > 1 ? (win[win.length - 1].t - win[0].t) / 1000 : 0;
+    var fps = span > 0 ? (win.length - 1) / span : (win.length ? 1 / 5 * win.length : 0);
+    var bps = win.reduce(function (a, h) { return a + h.b; }, 0) * 8 / 5;
+    var res = frameImg.naturalWidth ? frameImg.naturalWidth + '×' + frameImg.naturalHeight : '';
+    summary = { fps: Math.round(fps * 10) / 10, kbps: Math.round(bps / 1000), age: Math.round(fb.lastAge), res: res.replace('×', 'x'), kb: Math.round(fb.lastBytes / 1024) };
+    rows = [
+      ['live.st.mode', t('live.state.frames'), 'warn'],
+      ['live.st.conn', t('live.st.conn_http')],
+      ['live.st.res', res || '—'],
+      ['live.st.display', dispSize(frameImg)],
+      ['live.st.fps', fps ? fps.toLocaleString(App.cfg.lang, { maximumFractionDigits: 1 }) : '0'],
+      ['live.st.bitrate', fmtRate(bps)],
+      ['live.st.frame_size', fb.lastBytes ? Math.round(fb.lastBytes / 1024) + ' KB' : '—'],
+      ['live.st.frame_age', fmtMs(fb.lastAge)],
+      ['live.st.fetch', fmtMs(fb.lastFetch)],
+      ['live.st.frames_got', String(fb.got)],
+      ['live.st.frames_same', String(fb.same)],
+      ['live.st.data', (fb.bytes / 1048576).toLocaleString(App.cfg.lang, { maximumFractionDigits: 1 }) + ' MB'],
+      ['live.st.errors', String(fb.errors), fb.errors ? 'warn' : ''],
+      ['live.view.quality', t('live.vq.' + vq)]
+    ];
+    render();
+  }
+  function collectRtc() {
+    if (!pc) { summary = null; rows = [['live.st.mode', t('live.state.' + state)]]; render(); return; }
     pc.getStats().then(function (rep) {
       var inb = null, pair = null, codecs = {}, cands = {};
       rep.forEach(function (r) {
@@ -321,36 +362,46 @@
         else if (r.type === 'codec') codecs[r.id] = r;
         else if (r.type === 'local-candidate' || r.type === 'remote-candidate') cands[r.id] = r;
       });
-      if (!inb) { statsBox.innerHTML = row('live.st.mode', t('live.state.' + state)); return; }
+      if (!inb) { summary = null; rows = [['live.st.mode', t('live.state.' + state)]]; render(); return; }
       var bps = prevIn && inb.timestamp > prevIn.timestamp ? (inb.bytesReceived - prevIn.bytesReceived) * 8000 / (inb.timestamp - prevIn.timestamp) : -1;
-      var lossPct = prevIn ? (function () {
+      var lossPct = 0;
+      if (prevIn) {
         var lost = (inb.packetsLost || 0) - prevIn.lost, got = (inb.packetsReceived || 0) - prevIn.got;
-        return got + lost > 0 ? Math.max(0, lost) / (got + lost) * 100 : 0;
-      })() : 0;
+        lossPct = got + lost > 0 ? Math.max(0, lost) / (got + lost) * 100 : 0;
+      }
       prevIn = { bytesReceived: inb.bytesReceived, timestamp: inb.timestamp, lost: inb.packetsLost || 0, got: inb.packetsReceived || 0 };
       var lc = pair && cands[pair.localCandidateId], rc = pair && cands[pair.remoteCandidateId];
       var conn = !lc ? '—' : (lc.candidateType === 'relay' || (rc && rc.candidateType === 'relay') ? 'TURN' : (lc.candidateType === 'host' && (!rc || rc.candidateType === 'host') ? 'LAN' : 'P2P'));
-      statsBox.innerHTML =
-        row('live.st.res', (inb.frameWidth || video.videoWidth || 0) + '×' + (inb.frameHeight || video.videoHeight || 0)) +
-        row('live.st.display', disp) +
-        row('live.st.fps', inb.framesPerSecond !== undefined ? String(Math.round(inb.framesPerSecond)) : '—') +
-        row('live.st.bitrate', fmtRate(bps)) +
-        row('live.st.codec', inb.codecId && codecs[inb.codecId] ? codecs[inb.codecId].mimeType.replace('video/', '') : '—') +
-        row('live.st.loss', lossPct.toFixed(1) + ' %') +
-        row('live.st.jitter', inb.jitter !== undefined ? Math.round(inb.jitter * 1000) + ' ms' : '—') +
-        row('live.st.rtt', pair && pair.currentRoundTripTime !== undefined ? Math.round(pair.currentRoundTripTime * 1000) + ' ms' : '—') +
-        row('live.st.dropped', String(inb.framesDropped || 0)) +
-        row('live.st.conn', conn) +
-        row('live.view.quality', t('live.vq.' + vq));
+      var w = inb.frameWidth || video.videoWidth || 0, h = inb.frameHeight || video.videoHeight || 0;
+      var rtt = pair && pair.currentRoundTripTime !== undefined ? pair.currentRoundTripTime * 1000 : -1;
+      summary = { fps: Math.round(inb.framesPerSecond || 0), kbps: bps >= 0 ? Math.round(bps / 1000) : 0, rtt: Math.round(rtt), res: w + 'x' + h, loss: Math.round(lossPct * 10) / 10 };
+      rows = [
+        ['live.st.mode', 'WebRTC'],
+        ['live.st.conn', conn],
+        ['live.st.res', w + '×' + h],
+        ['live.st.display', dispSize(video)],
+        ['live.st.fps', inb.framesPerSecond !== undefined ? String(Math.round(inb.framesPerSecond)) : '—'],
+        ['live.st.bitrate', fmtRate(bps)],
+        ['live.st.codec', inb.codecId && codecs[inb.codecId] ? codecs[inb.codecId].mimeType.replace('video/', '') : '—'],
+        ['live.st.loss', lossPct.toFixed(1) + ' %', lossPct > 2 ? 'warn' : ''],
+        ['live.st.jitter', inb.jitter !== undefined ? Math.round(inb.jitter * 1000) + ' ms' : '—'],
+        ['live.st.rtt', fmtMs(rtt)],
+        ['live.st.dropped', String(inb.framesDropped || 0)],
+        ['live.view.quality', t('live.vq.' + vq)]
+      ];
+      render();
     }).catch(function () {});
   }
+  setInterval(function () {
+    if (finished) return;
+    if (mode === 'frames') collectFrames(); else collectRtc();
+  }, 1000);
   $('btn-stats').addEventListener('click', function () {
     statsOn = !statsOn;
     statsBox.hidden = !statsOn;
     this.classList.toggle('active', statsOn);
     try { localStorage.setItem('sslive-vstats', statsOn ? '1' : '0'); } catch (e) {}
-    clearInterval(statsTimer);
-    if (statsOn) { statsTick(); statsTimer = setInterval(statsTick, 1000); }
+    render();
   });
   try { if (localStorage.getItem('sslive-vstats') === '1') $('btn-stats').click(); } catch (e) {}
 

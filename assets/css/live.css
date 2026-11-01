@@ -160,3 +160,6 @@ dialog.present-modal::backdrop { background: rgba(10, 12, 20, .7); }
 .stage.actual { display: block; overflow: auto; }
 .stage.actual video, .stage.actual img { height: auto; max-width: none; object-fit: initial; margin: 0 auto; }
 .stage.actual .stats-box { position: fixed; top: 64px; }
+.stats-sub { display: flex; align-items: center; gap: 8px; font-size: .9rem; margin: 14px 0 8px; color: var(--warn); }
+.stats-sub .ic { width: 17px; height: 17px; }
+.stats-box .warn b { color: #f2b443; }

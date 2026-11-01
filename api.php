@@ -69,7 +69,7 @@ function publisher_stream(array $in): array
         json_out(['status' => 'ended', 'reason' => (string)$s['end_reason']]);
     }
     $pub = (string)($in['pub'] ?? ($_GET['pub'] ?? ''));
-    if (!hash_equals((string)$s['pub_token'], $pub)) {
+    if ((string)$s['pub_token'] === '' || $pub === '' || !hash_equals((string)$s['pub_token'], $pub)) {
         json_out(['error' => __('live.err.taken_over'), 'code' => 'taken'], 409);
     }
     return $s;
@@ -133,12 +133,34 @@ switch ($action) {
         $in = input();
         $title = trim(preg_replace('/\s+/u', ' ', (string)($in['title'] ?? '')));
         $title = mb_substr($title !== '' ? $title : __('live.default_title', ['date' => date('Y-m-d H:i')]), 0, 190);
-        $s = Live::start((int)$u['id'], $title, (int)($in['minutes'] ?? Live::defaultMinutes()), (int)($in['max_viewers'] ?? Live::maxViewers()), !empty($in['audio']));
+        $s = Live::start((int)$u['id'], $title, (int)($in['minutes'] ?? Live::defaultMinutes()), (int)($in['max_viewers'] ?? Live::maxViewers()), !empty($in['audio']),
+            (string)($in['codec'] ?? ''), (string)($in['quality'] ?? ''));
         if (!$s) {
             $a = Live::active();
             json_out(['error' => __('live.err.busy', ['user' => $a['username'] ?? '?', 'time' => $a ? date('H:i', Live::ts($a['ends_at'])) : '']), 'code' => 'busy'], 409);
         }
+        // Powiadomienie e-mail wysyłane po odpowiedzi do przeglądarki (nie opóźnia startu)
+        if (Notifier::shouldNotify()) {
+            $started = $s;
+            register_shutdown_function(function () use ($started) {
+                if (function_exists('fastcgi_finish_request')) {
+                    @fastcgi_finish_request();
+                }
+                Notifier::streamStarted($started);
+            });
+        }
         json_out(['stream' => Live::publicInfo($s), 'code' => $s['code'], 'pub' => $s['pub_token'], 'max_viewers' => (int)$s['max_viewers']]);
+
+    case 'pub.bye':
+        // sendBeacon przy zamknięciu karty nauczyciela
+        require_post($isPost);
+        $in = input();
+        $u = Auth::user();
+        $s = Live::find((int)($in['sid'] ?? 0));
+        if ($u && $s && Live::isLive($s) && (int)$s['user_id'] === (int)$u['id'] && (string)$s['pub_token'] !== '' && hash_equals((string)$s['pub_token'], (string)($in['pub'] ?? ''))) {
+            Live::bye($s);
+        }
+        json_out(['ok' => true]);
 
     case 'pub.resume':
         require_post($isPost);
@@ -171,6 +193,7 @@ switch ($action) {
             'name' => (string)$v['name'],
             'mode' => (string)$v['mode'],
             'state' => (string)$v['state'],
+            'stats' => $v['stats'] ? json_decode((string)$v['stats'], true) : null,
             'joined' => Live::ts($v['joined_at']),
         ], Live::viewers((int)$s['id']));
         json_out(stream_state($s) + [
@@ -269,7 +292,7 @@ switch ($action) {
         $_SESSION['live_tokens'] = array_slice(array_merge((array)($_SESSION['live_tokens'] ?? []), [$v['token']]), -10);
         // nauczyciel dostaje sygnał "hello" i wysyła ofertę połączenia
         Live::sendSignal((int)$s['id'], (int)$v['id'], 1, 'hello', null);
-        json_out(stream_state($s) + ['token' => $v['token'], 'viewer' => (int)$v['id'], 'stream' => Live::publicInfo($s)]);
+        json_out(stream_state($s) + ['token' => $v['token'], 'viewer' => (int)$v['id'], 'stream' => Live::publicInfo($s, true)]);
 
     case 'view.poll':
         require_post($isPost);
@@ -279,7 +302,7 @@ switch ($action) {
         if ($mode === 'frames' && !Settings::bool('live_fallback')) {
             $mode = 'webrtc';
         }
-        Live::touchViewer($v, isset($in['state']) ? (string)$in['state'] : null, $mode);
+        Live::touchViewer($v, isset($in['state']) ? (string)$in['state'] : null, $mode, is_array($in['st'] ?? null) ? $in['st'] : null);
         json_out(stream_state($s) + [
             'signals' => Live::takeSignals((int)$s['id'], 0, (int)$v['id']),
             'pub_online' => Live::ts($s['pub_seen_at']) > time() - 10,
@@ -317,6 +340,8 @@ switch ($action) {
         header('Content-Type: ' . $f['mime']);
         header('Cache-Control: no-store');
         header('X-Frame-Seq: ' . (int)$f['seq']);
+        // wiek klatki na serwerze (ms) – do statystyk opóźnienia w trybie zapasowym
+        header('X-Frame-Age: ' . max(0, Live::nowMs() - (int)$f['ts_ms']));
         echo $f['data'];
         exit;
 

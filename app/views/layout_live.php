@@ -12,7 +12,6 @@ $s = $liveCfg['stream'];
       <span class="live-pill" id="pill"><i></i><span id="pill-text"><?= e(__('live.state.connecting')) ?></span></span>
       <div class="pb-title">
         <strong title="<?= e($s['title']) ?>"><?= e($s['title']) ?></strong>
-        <span class="muted small"><?= icon('user') ?><?= e($s['teacher']) ?></span>
       </div>
     </div>
     <div class="pb-right">

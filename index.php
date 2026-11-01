@@ -80,7 +80,7 @@ if (!$hasAccess && $stream && $f['code'] !== '' && $nameMode !== 'required' && !
 if ($hasAccess) {
     $liveCfg = [
         'sid' => (int)$stream['id'],
-        'stream' => Live::publicInfo($stream),
+        'stream' => Live::publicInfo($stream, true),
         'ice' => Live::iceServers(),
         'fallback' => Settings::bool('live_fallback'),
         'name' => (string)($acc['name'] ?? ''),

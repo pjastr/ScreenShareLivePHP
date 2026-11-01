@@ -3,6 +3,25 @@
 Każda zmiana podnosi numer wersji w `app/version.php` (`APP_VERSION`).
 Format: MAJOR.MINOR.PATCH – poprawki zwiększają PATCH, nowe funkcje MINOR.
 
+## 1.2.0 — 2026-11-01
+- **Powiadomienia e-mail** o rozpoczęciu transmisji (Panel admina → Ustawienia → Powiadomienia e-mail):
+  wyłączone / tylko pierwsza transmisja danego dnia / każda transmisja; adresaci (domyślnie wszyscy
+  administratorzy); wysyłka przez `mail()` serwera albo SMTP (STARTTLS, SSL/TLS, logowanie);
+  przycisk „Wyślij e-mail testowy” i status ostatniej wysyłki. E-mail wysyłany jest po starcie
+  transmisji, nie opóźnia jej.
+- **Wybór kodeka przy rozpoczęciu transmisji** (VP9 / H.264 / AV1 / VP8 / domyślny przeglądarki;
+  kodeki niedostępne w przeglądarce są wyłączone). Kodek i jakość widoczne w historii transmisji.
+- **Zamknięcie karty przez nauczyciela kończy transmisję** (po ok. 10 s – odświeżenie strony
+  jej nie przerywa). W historii powód „zamknięcie karty nauczyciela”.
+- **Widok ucznia nie pokazuje loginu nauczyciela** (login nie jest też wysyłany do przeglądarki ucznia).
+- **Więcej statystyk w trybie zapasowym**: u ucznia klatki/s, przepływność, rozmiar i wiek klatki
+  (opóźnienie), czas pobierania, liczba odebranych/pominiętych klatek, pobrane dane, błędy;
+  u nauczyciela osobna sekcja (widzowie w trybie zapasowym, wysyłane klatki/s, rozmiar i czas
+  wysłania klatki, szacowany ruch serwera, średnie opóźnienie u widzów) oraz statystyki każdego
+  ucznia (także straty pakietów zgłaszane przez ucznia).
+- Wymaga aktualizacji bazy danych (migracja 002 – kolumny kodeka/jakości, statystyk widza,
+  znacznika czasu klatki i ustawienia e-mail).
+
 ## 1.1.0 — 2026-11-01
 - **Wyższa jakość obrazu**: przechwytywanie w pełnej rozdzielczości ekranu (do 4K, wcześniej
   maks. Full HD), wyższe przepływności (do 6 Mb/s na widza), kodek **VP9** domyślnie (ostrzejszy

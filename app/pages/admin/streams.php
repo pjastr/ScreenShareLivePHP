@@ -27,6 +27,7 @@ ob_start(); ?>
       <th><?= e(__('admin.streams.teacher')) ?></th>
       <th><?= e(__('live.started')) ?></th>
       <th class="num"><?= e(__('admin.streams.duration')) ?></th>
+      <th><?= e(__('admin.streams.codec')) ?></th>
       <th class="num"><?= e(__('admin.streams.peak')) ?></th>
       <th class="num"><?= e(__('admin.streams.total')) ?></th>
       <th><?= e(__('admin.streams.end')) ?></th>
@@ -40,12 +41,13 @@ ob_start(); ?>
         <td><?= e($r['username'] ?? __('admin.streams.deleted_user')) ?></td>
         <td><?= e(format_date($r['started_at'])) ?></td>
         <td class="num"><?= e(__('live.minutes', ['n' => (int)round($dur / 60)])) ?></td>
+        <td class="small"><?= e(strtoupper((string)($r['codec'] ?? '')) ?: '—') ?><?= !empty($r['quality']) ? ' · <span class="muted">' . e(__('live.q.' . $r['quality'])) . '</span>' : '' ?></td>
         <td class="num"><?= (int)$r['peak_viewers'] ?></td>
         <td class="num"><?= (int)$r['total_viewers'] ?></td>
         <td class="muted small"><?= $live ? '—' : e(__('live.reason.' . ($r['end_reason'] ?: 'manual'))) ?></td>
       </tr>
     <?php endforeach; ?>
-    <?php if (!$rows): ?><tr><td colspan="7" class="muted center"><?= e(__('admin.streams.none')) ?></td></tr><?php endif; ?>
+    <?php if (!$rows): ?><tr><td colspan="8" class="muted center"><?= e(__('admin.streams.none')) ?></td></tr><?php endif; ?>
     </tbody>
   </table>
 </div>

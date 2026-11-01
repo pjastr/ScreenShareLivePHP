@@ -65,6 +65,10 @@ na zwykłym hostingu współdzielonym. Licencja: **MIT**.
   utracone pakiety, jitter, opóźnienie i typ połączenia (LAN / P2P / TURN).
 - Przy 25 widzach komputer nauczyciela koduje obraz osobno dla każdego widza, a łącze wysyła
   25 strumieni. Gdy statystyki pokazują ograniczenie „procesor” lub „łącze”, wybierz niższy preset.
+- **Kodek wybiera nauczyciel przy rozpoczęciu transmisji** (domyślny ustawia administrator).
+- Zamknięcie karty przez nauczyciela kończy transmisję po ok. 10 s (odświeżenie strony jej nie przerywa).
+- W trybie zapasowym statystyki pokazują m.in. klatki/s, przepływność, rozmiar i wiek klatki
+  (opóźnienie), czas pobierania, pominięte klatki i błędy – u ucznia i zbiorczo u nauczyciela.
 - Opcjonalnie dźwięk karty lub systemu (Chrome/Edge; Firefox udostępnia tylko obraz).
 - **Serwery STUN/TURN** ustawia się w Panelu admina. Domyślny publiczny STUN wystarcza w szkolnej
   sieci i w większości sieci domowych. Gdy uczniowie łączą się z sieci z restrykcyjną zaporą,
@@ -126,6 +130,9 @@ można pobrać kopię bazy (Panel admina → Aktualizacje → Pobierz kopię baz
   użytkownik (nauczyciel)**, weryfikacja dwuetapowa **2FA (TOTP)** z kodem QR i kodami zapasowymi,
   opcjonalne wymuszanie 2FA, blokada po nieudanych próbach logowania.
 - Wejście do panelu admina wymaga 2FA i świeżego kodu.
+- **Powiadomienia e-mail o rozpoczęciu transmisji**: wyłączone / pierwsza transmisja danego dnia /
+  każda transmisja, do administratorów lub wskazanych adresów, przez `mail()` serwera albo SMTP
+  (STARTTLS / SSL, z logowaniem) – z przyciskiem wysyłki testowej. Bez zewnętrznych bibliotek.
 - Panel: przegląd z **bieżącą transmisją** (kod, widzowie, przycisk zakończenia),
   **historia transmisji**, użytkownicy, ustawienia (limity, imię widza: brak / opcjonalne /
   wymagane, jakość, tryb zapasowy, STUN/TURN), języki (wbudowane PL i EN, dodawanie kolejnych
